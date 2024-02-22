@@ -89,7 +89,7 @@ void serverClientInteraction(int csoc, unordered_map<string, pair<string, bool>>
         {
             // TODO: Implement Logout
             string user = strtok(data + 4, " ");
-            if (users.find(user) != users.end() && users[user].second == true)
+            if (users.find(user) != users.end() && users[user].second == true && user == username)
             {
                 users[user].second = false;
                 char *response = "0008GOOD";
