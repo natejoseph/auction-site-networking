@@ -40,7 +40,7 @@ int recvLoop(int csoc, char *data, const int size)
     return size - nleft;
 }
 
-char *readServerResponse(int csoc)
+char *readServerResponse(int &csoc)
 {
     char buf[4];
     recvLoop(csoc, buf, 4);
@@ -51,6 +51,141 @@ char *readServerResponse(int csoc)
     // cout << "Server Response: " << data << endl;
 
     return data;
+}
+
+void errorMessagePrint() // TODO:
+{
+}
+
+void login(int &index, string &command, int &csoc, bool &loggedIn, string &username)
+{
+    if (loggedIn)
+    {
+        cout << "Already logged in\n";
+        return;
+    }
+    char appmsg[40] = "0040LGIN";
+    string user;
+    for (int i = 8; i < 24; i++)
+    {
+        if (index < command.size() && command[index] != ' ')
+        {
+            appmsg[i] = command[index];
+            user += command[index];
+            index++;
+        }
+        else
+        {
+            appmsg[i] = ' ';
+        }
+    }
+    if (command[index] != ' ')
+    {
+        cout << "Username error\n";
+        return;
+    }
+    index++;
+    bool password = false;
+    for (int i = 24; i < 40; i++)
+    {
+        if (index < command.size() && command[index] != ' ')
+        {
+            appmsg[i] = command[index];
+            index++;
+            password = true;
+        }
+        else
+        {
+            appmsg[i] = ' ';
+        }
+    }
+    if (index < command.size() && command[index] != ' ' || !password)
+    {
+        cout << "Password error\n";
+        return;
+    }
+    send(csoc, appmsg, 40, 0);
+
+    // Login response
+    char *response = readServerResponse(csoc);
+    if (strncmp(response, "GOOD", 4) == 0)
+    {
+        cout << "Login successful\n";
+        loggedIn = true;
+        username = user;
+    }
+    else if (strncmp(response, "ERRM", 4) == 0)
+    {
+        cout << "Login failed with error message\n";
+    }
+    else
+    {
+        cout << "Login failed\n";
+    }
+}
+
+void logout(int &csoc, bool &loggedIn, string &username)
+{
+    // Logout send
+    if (!loggedIn)
+    {
+        cout << "Not logged in\n";
+        return;
+    }
+    char appmsg[24] = "0024LOUT";
+    int j = 0;
+    for (int i = 8; i < 24; i++)
+    {
+        if (j < username.size())
+        {
+            appmsg[i] = username[j];
+            j++;
+        }
+        else
+        {
+            appmsg[i] = ' ';
+        }
+    }
+    send(csoc, appmsg, 24, 0);
+
+    // Logout response
+    char *response = readServerResponse(csoc);
+    if (strncmp(response, "GOOD", 4) == 0)
+    {
+        cout << "Logout successful\n";
+        loggedIn = false;
+        username = "";
+    }
+    else if (strncmp(response, "ERRM", 4) == 0)
+    {
+        cout << "Logout failed with error message\n";
+    }
+    else
+    {
+        cout << "Logout failed\n";
+    }
+}
+
+void exitProg(int &csoc)
+{
+    // Exit send
+    char *appmsg = "0008EXIT";
+    send(csoc, appmsg, 8, 0);
+
+    // Exit response
+    char *response = readServerResponse(csoc);
+    if (strncmp(response, "GOOD", 4) == 0)
+    {
+        cout << "Exit successful\n";
+    }
+    else if (strncmp(response, "ERRM", 4) == 0)
+    {
+        cout << "Exit failed with error message\n";
+    }
+    else
+    {
+        cout << "Exit failed\n";
+    }
 }
 
 void clientInterface(int csoc)
@@ -76,111 +211,11 @@ void clientInterface(int csoc)
 
         if (tokens[0] == "login") // 0040LGIN<username><password>
         {
-            if (loggedIn)
-            {
-                cout << "Already logged in\n";
-                continue;
-            }
-            // Login send
-            char appmsg[40] = "0040LGIN";
-            string user;
-            for (int i = 8; i < 24; i++)
-            {
-                if (index < command.size() && command[index] != ' ')
-                {
-                    appmsg[i] = command[index];
-                    user += command[index];
-                    index++;
-                }
-                else
-                {
-                    appmsg[i] = ' ';
-                }
-            }
-            if (command[index] != ' ')
-            {
-                cout << "Username error\n";
-                continue;
-            }
-            index++;
-            bool password = false;
-            for (int i = 24; i < 40; i++)
-            {
-                if (index < command.size() && command[index] != ' ')
-                {
-                    appmsg[i] = command[index];
-                    index++;
-                    password = true;
-                }
-                else
-                {
-                    appmsg[i] = ' ';
-                }
-            }
-            if (index < command.size() && command[index] != ' ' || !password)
-            {
-                cout << "Password error\n";
-                continue;
-            }
-            send(csoc, appmsg, 40, 0);
-
-            // Login response
-            char *response = readServerResponse(csoc);
-            if (strncmp(response, "GOOD", 4) == 0)
-            {
-                cout << "Login successful\n";
-                loggedIn = true;
-                username = user;
-            }
-            else if (strncmp(response, "ERRM", 4) == 0)
-            {
-                cout << "Login failed with error message\n";
-            }
-            else
-            {
-                cout << "Login failed\n";
-            }
+            login(index, command, csoc, loggedIn, username);
         }
         else if (tokens[0] == "logout") // 0024LOUT<username>
         {
-            // Logout send
-            if (!loggedIn)
-            {
-                cout << "Not logged in\n";
-                continue;
-            }
-            char appmsg[24] = "0024LOUT";
-            int j = 0;
-            for (int i = 8; i < 24; i++)
-            {
-                if (j < username.size())
-                {
-                    appmsg[i] = username[j];
-                    j++;
-                }
-                else
-                {
-                    appmsg[i] = ' ';
-                }
-            }
-            send(csoc, appmsg, 24, 0);
-
-            // Logout response
-            char *response = readServerResponse(csoc);
-            if (strncmp(response, "GOOD", 4) == 0)
-            {
-                cout << "Logout successful\n";
-                loggedIn = false;
-                username = "";
-            }
-            else if (strncmp(response, "ERRM", 4) == 0)
-            {
-                cout << "Logout failed with error message\n";
-            }
-            else
-            {
-                cout << "Logout failed\n";
-            }
+            logout(csoc, loggedIn, username);
         }
         else if (tokens[0] == "post") // TODO:
         {
@@ -228,24 +263,7 @@ void clientInterface(int csoc)
         }
         else if (tokens[0] == "exit") // 0008EXIT
         {
-            // Exit send
-            char *appmsg = "0008EXIT";
-            send(csoc, appmsg, 8, 0);
-
-            // Exit response
-            char *response = readServerResponse(csoc);
-            if (strncmp(response, "GOOD", 4) == 0)
-            {
-                cout << "Exit successful\n";
-            }
-            else if (strncmp(response, "ERRM", 4) == 0)
-            {
-                cout << "Exit failed with error message\n";
-            }
-            else
-            {
-                cout << "Exit failed\n";
-            }
+            exitProg(csoc);
             break;
         }
         else

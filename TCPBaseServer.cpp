@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
 	int ssoc;	 // server socket -passive
 	int commsoc; // communication socket -active
 
-	int sckt = 50005;
+	int sckt = 50000;
 
 	cout << "TCPBaseServer" << endl; // prints TCPBaseServer
 

@@ -14,6 +14,75 @@
 
 using namespace std;
 
+class User
+{
+    string username;
+    string password;
+    int uid;
+
+public:
+    User(string username, string password, int uid)
+    {
+        this->username = username;
+        this->password = password;
+        this->uid = uid;
+    }
+
+    bool checkPassword(string password)
+    {
+        return this->password == password;
+    }
+
+    string getUsername()
+    {
+        return this->username;
+    }
+};
+
+struct Message
+{
+    User *from;
+    int timestamp;
+    int ttl;
+    string data;
+
+    // optional
+    User *to;
+    bool visible;
+
+    Message(User *from, int timestamp, int ttl, string data)
+    {
+        this->from = from;
+        this->timestamp = timestamp;
+        this->ttl = ttl;
+        this->data = data;
+    }
+
+    void setTo(User *to)
+    {
+        this->to = to;
+    }
+
+    void setVisible(bool visible)
+    {
+        this->visible = visible;
+    }
+
+    bool checkActive()
+    {
+        return this->visible;
+    }
+
+    void display()
+    {
+        cout << "From: " << this->from->getUsername() << endl;
+        cout << "Timestamp: " << this->timestamp << endl;
+        cout << "TTL: " << this->ttl << endl;
+        cout << "Message:\n"
+             << this->data << endl;
+    }
+};
+
 int recvLoop(int csoc, char *data, const int size)
 {
     int nleft, nread;
@@ -92,6 +161,7 @@ void serverClientInteraction(int csoc, unordered_map<string, pair<string, bool>>
             if (users.find(user) != users.end() && users[user].second == true && user == username)
             {
                 users[user].second = false;
+                username = "";
                 char *response = "0008GOOD";
                 send(csoc, response, 8, 0);
             }
@@ -121,6 +191,11 @@ void serverClientInteraction(int csoc, unordered_map<string, pair<string, bool>>
         {
             // Send Response
             char *response = "0008GOOD";
+            if (username != "")
+            {
+                users[username].second = false;
+                username = "";
+            }
             send(csoc, response, 8, 0);
             break;
         }
