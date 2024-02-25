@@ -19,7 +19,7 @@ using namespace std;
 #include <unistd.h>
 #include <stdlib.h>
 
-#include "ClientProgram.h"
+#include "client/ClientProgram.h"
 
 void baseTCPProtocolC(int csoc) // app protocol!
 {

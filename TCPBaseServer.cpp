@@ -17,10 +17,7 @@ using namespace std;
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
-#include "ServerProgram.h"
-
-unordered_map<string, pair<string, bool>> users;
-unordered_map<string, string> msgs;
+#include "middleware/MiddlewareProgram.h"
 
 void baseTCPProtocolS(int csoc)
 {
@@ -29,7 +26,7 @@ void baseTCPProtocolS(int csoc)
 	// read 10 bytes from client
 	// char buf[10];
 	// recvLoop(csoc, buf, 10);
-	serverClientInteraction(csoc, users, msgs);
+	serverClientInteraction(csoc);
 
 	// send 10 bytes to client
 	// send(csoc, buf, 10, 0);
@@ -46,7 +43,7 @@ int main(int argc, char *argv[])
 	int ssoc;	 // server socket -passive
 	int commsoc; // communication socket -active
 
-	int sckt = 50000;
+	int sckt = 50004;
 
 	cout << "TCPBaseServer" << endl; // prints TCPBaseServer
 

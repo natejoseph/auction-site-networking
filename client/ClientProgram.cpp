@@ -14,6 +14,8 @@
 
 using namespace std;
 
+// TODO: Error handling, getm
+
 int recvLoop(int csoc, char *data, const int size)
 {
     int nleft, nread;
@@ -40,6 +42,40 @@ int recvLoop(int csoc, char *data, const int size)
     return size - nleft;
 }
 
+/*NBResponse *readServer(int &csoc)
+{
+    char buf[4];
+    recvLoop(csoc, buf, 4);
+    int size = atoi(buf);
+    char *data = new char[size + 4];
+    recvLoop(csoc, data, size + 4);
+    // cout << "Server Response: " << data << endl;
+
+    return new NBResponse(size, data);
+}*/
+
+struct NBResponse
+{
+    int size;
+    char *type;
+    char *data;
+
+    NBResponse(int &csoc)
+    {
+        char buf[4];
+        recvLoop(csoc, buf, 4);
+        this->size = atoi(buf);
+        recvLoop(csoc, buf, 4);
+        this->type = buf;
+        if (size > 0)
+        {
+            char *data = new char[this->size];
+            recvLoop(csoc, data, this->size);
+            this->data = data;
+        }
+    }
+};
+
 char *readServerResponse(int &csoc)
 {
     char buf[4];
@@ -48,13 +84,25 @@ char *readServerResponse(int &csoc)
     size -= 4;
     char *data = new char[size];
     recvLoop(csoc, data, size);
-    // cout << "Server Response: " << data << endl;
+    cout << "Server Response: " << data << endl;
 
     return data;
 }
 
 void errorMessagePrint() // TODO:
 {
+}
+
+string messageEncode(string msg)
+{
+    string op = to_string(msg.size() + 4);
+    while (op.size() < 4)
+    {
+        op = "0" + op;
+    }
+    op += "POST";
+    op += msg;
+    return op;
 }
 
 void login(int &index, string &command, int &csoc, bool &loggedIn, string &username)
@@ -64,7 +112,7 @@ void login(int &index, string &command, int &csoc, bool &loggedIn, string &usern
         cout << "Already logged in\n";
         return;
     }
-    char appmsg[40] = "0040LGIN";
+    char appmsg[40] = "0032LGIN";
     string user;
     for (int i = 8; i < 24; i++)
     {
@@ -107,20 +155,20 @@ void login(int &index, string &command, int &csoc, bool &loggedIn, string &usern
     send(csoc, appmsg, 40, 0);
 
     // Login response
-    char *response = readServerResponse(csoc);
-    if (strncmp(response, "GOOD", 4) == 0)
+    NBResponse *response = new NBResponse(csoc);
+    if (strncmp(response->type, "GOOD", 4) == 0)
     {
         cout << "Login successful\n";
         loggedIn = true;
         username = user;
     }
-    else if (strncmp(response, "ERRM", 4) == 0)
+    else if (strncmp(response->type, "ERRM", 4) == 0)
     {
         cout << "Login failed with error message\n";
     }
     else
     {
-        cout << "Login failed\n";
+        cout << "Login error\n";
     }
 }
 
@@ -132,7 +180,7 @@ void logout(int &csoc, bool &loggedIn, string &username)
         cout << "Not logged in\n";
         return;
     }
-    char appmsg[24] = "0024LOUT";
+    char appmsg[24] = "0020LOUT";
     int j = 0;
     for (int i = 8; i < 24; i++)
     {
@@ -149,27 +197,57 @@ void logout(int &csoc, bool &loggedIn, string &username)
     send(csoc, appmsg, 24, 0);
 
     // Logout response
-    char *response = readServerResponse(csoc);
-    if (strncmp(response, "GOOD", 4) == 0)
+    NBResponse *response = new NBResponse(csoc);
+    if (strncmp(response->type, "GOOD", 4) == 0)
     {
         cout << "Logout successful\n";
         loggedIn = false;
         username = "";
     }
-    else if (strncmp(response, "ERRM", 4) == 0)
+    else if (strncmp(response->type, "ERRM", 4) == 0)
     {
         cout << "Logout failed with error message\n";
     }
     else
     {
-        cout << "Logout failed\n";
+        cout << "Logout error\n";
+    }
+}
+
+void post(string &command, int &csoc, bool &loggedIn)
+{
+    if (!loggedIn)
+    {
+        cout << "Not logged in\n";
+        return;
+    }
+    // Post send
+    string msg = command.substr(5);
+    string op = messageEncode(msg);
+    char appmsg[op.length()];
+    strcpy(appmsg, op.c_str());
+    send(csoc, appmsg, op.length(), 0);
+
+    // Post response
+    char *response = readServerResponse(csoc);
+    if (strncmp(response, "GOOD", 4) == 0)
+    {
+        cout << "Post successful\n";
+    }
+    else if (strncmp(response, "ERRM", 4) == 0)
+    {
+        cout << "Post failed with error message\n";
+    }
+    else
+    {
+        cout << "Post failed\n";
     }
 }
 
 void exitProg(int &csoc)
 {
     // Exit send
-    char *appmsg = "0008EXIT";
+    char *appmsg = "0004EXIT";
     send(csoc, appmsg, 8, 0);
 
     // Exit response
@@ -217,42 +295,23 @@ void clientInterface(int csoc)
         {
             logout(csoc, loggedIn, username);
         }
-        else if (tokens[0] == "post") // TODO:
+        else if (tokens[0] == "post") // <sz>POST<message>
         {
-            // Post send
-            char appmsg[8] = "0008POS";
-            appmsg[7] = 'T';
-            send(csoc, appmsg, 8, 0);
-
-            // Post response
-            char *response = readServerResponse(csoc);
-            if (strncmp(response, "GOOD", 4) == 0)
-            {
-                cout << "Post successful\n";
-            }
-            else if (strncmp(response, "ERRM", 4) == 0)
-            {
-                cout << "Post failed with error message\n";
-            }
-            else
-            {
-                cout << "Post failed\n";
-            }
+            post(command, csoc, loggedIn);
         }
         else if (tokens[0] == "getm") // TODO:
         {
             // Get Messages send
-            char appmsg[8] = "0008GET";
-            appmsg[7] = 'M';
+            char *appmsg = "0004GETM";
             send(csoc, appmsg, 8, 0);
 
             // Get Messages response
-            char *response = readServerResponse(csoc);
-            if (strncmp(response, "LIST", 4) == 0)
+            NBResponse *response = new NBResponse(csoc);
+            if (strncmp(response->type, "LIST", 4) == 0)
             {
                 cout << "Get Messages successful\n";
             }
-            else if (strncmp(response, "ERRM", 4) == 0)
+            else if (strncmp(response->type, "ERRM", 4) == 0)
             {
                 cout << "Get Messages failed with error message\n";
             }
