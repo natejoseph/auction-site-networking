@@ -16,6 +16,32 @@ using namespace std;
 
 // TODO: Error handling, getm
 
+// Object Definitions
+struct NBResponse
+{
+    int size;
+    char *type;
+    char *data;
+
+    NBResponse(int &csoc)
+    {
+        char buf[5];
+        buf[4] = '\0';
+        recvLoop(csoc, buf, 4);
+        this->size = atoi(buf);
+        recvLoop(csoc, buf, 4);
+        this->type = buf;
+        if (size > 0)
+        {
+            char *data = new char[this->size];
+            recvLoop(csoc, data, this->size);
+            this->data = data;
+            // cout << "Received data: " << this->data << endl;
+        }
+    }
+};
+
+// Function Definitions
 int recvLoop(int csoc, char *data, const int size)
 {
     int nleft, nread;
@@ -42,60 +68,13 @@ int recvLoop(int csoc, char *data, const int size)
     return size - nleft;
 }
 
-/*NBResponse *readServer(int &csoc)
-{
-    char buf[4];
-    recvLoop(csoc, buf, 4);
-    int size = atoi(buf);
-    char *data = new char[size + 4];
-    recvLoop(csoc, data, size + 4);
-    // cout << "Server Response: " << data << endl;
-
-    return new NBResponse(size, data);
-}*/
-
-struct NBResponse
-{
-    int size;
-    char *type;
-    char *data;
-
-    NBResponse(int &csoc)
-    {
-        char buf[4];
-        recvLoop(csoc, buf, 4);
-        this->size = atoi(buf);
-        recvLoop(csoc, buf, 4);
-        this->type = buf;
-        if (size > 0)
-        {
-            char *data = new char[this->size];
-            recvLoop(csoc, data, this->size);
-            this->data = data;
-        }
-    }
-};
-
-char *readServerResponse(int &csoc)
-{
-    char buf[4];
-    recvLoop(csoc, buf, 4);
-    int size = atoi(buf);
-    size -= 4;
-    char *data = new char[size];
-    recvLoop(csoc, data, size);
-    cout << "Server Response: " << data << endl;
-
-    return data;
-}
-
 void errorMessagePrint() // TODO:
 {
 }
 
 string messageEncode(string msg)
 {
-    string op = to_string(msg.size() + 4);
+    string op = to_string(msg.size());
     while (op.size() < 4)
     {
         op = "0" + op;
@@ -105,6 +84,35 @@ string messageEncode(string msg)
     return op;
 }
 
+void printMessages(NBResponse *msg)
+{
+    cout << "Messages:\n";
+    // data format: timestamp;name,timestamp,ttl,message)=msg-end=(
+
+    string data = string(msg->data);
+    string delimiter = ")=msg-end=(";
+    size_t pos = 0;
+    string token;
+    while ((pos = data.find(delimiter)) != string::npos)
+    {
+        // format: timestamp;name,timestamp,ttl,message
+        auto stt = data.find(";") + 1;
+        cout << "From: " << data.substr(stt, data.find(",", stt) - stt) << endl;
+        stt = data.find(",", stt) + 1;
+        cout << "Timestamp: " << data.substr(stt, data.find(",", stt) - stt) << endl;
+        stt = data.find(",", stt) + 1;
+        cout << "TTL: " << data.substr(stt, data.find(",", stt) - stt) << endl;
+        stt = data.find(",", stt) + 1;
+        cout << "Message:\n"
+             << data.substr(stt, pos - stt) << endl
+             << endl;
+        // token = data.substr(0, pos);
+        //  cout << token << endl;
+        data.erase(0, pos + delimiter.length());
+    }
+}
+
+// Client Functions
 void login(int &index, string &command, int &csoc, bool &loggedIn, string &username)
 {
     if (loggedIn)
@@ -180,7 +188,7 @@ void logout(int &csoc, bool &loggedIn, string &username)
         cout << "Not logged in\n";
         return;
     }
-    char appmsg[24] = "0020LOUT";
+    char appmsg[24] = "0016LOUT";
     int j = 0;
     for (int i = 8; i < 24; i++)
     {
@@ -229,34 +237,61 @@ void post(string &command, int &csoc, bool &loggedIn)
     send(csoc, appmsg, op.length(), 0);
 
     // Post response
-    char *response = readServerResponse(csoc);
-    if (strncmp(response, "GOOD", 4) == 0)
+    NBResponse *response = new NBResponse(csoc);
+    if (strncmp(response->type, "GOOD", 4) == 0)
     {
         cout << "Post successful\n";
     }
-    else if (strncmp(response, "ERRM", 4) == 0)
+    else if (strncmp(response->type, "ERRM", 4) == 0)
     {
         cout << "Post failed with error message\n";
     }
     else
     {
-        cout << "Post failed\n";
+        cout << "Post error\n";
+    }
+}
+
+void getMessages(int &csoc, bool &loggedIn)
+{
+    if (!loggedIn)
+    {
+        cout << "Not logged in\n";
+        return;
+    }
+    // Get Messages send
+    char *appmsg = "0000GETM";
+    send(csoc, appmsg, 8, 0);
+
+    // Get Messages response
+    NBResponse *response = new NBResponse(csoc);
+    if (strncmp(response->type, "LIST", 4) == 0)
+    {
+        printMessages(response);
+    }
+    else if (strncmp(response->type, "ERRM", 4) == 0)
+    {
+        cout << "Get Messages failed with error message\n";
+    }
+    else
+    {
+        cout << "Get Messages failed\n";
     }
 }
 
 void exitProg(int &csoc)
 {
     // Exit send
-    char *appmsg = "0004EXIT";
+    char *appmsg = "0000EXIT";
     send(csoc, appmsg, 8, 0);
 
     // Exit response
-    char *response = readServerResponse(csoc);
-    if (strncmp(response, "GOOD", 4) == 0)
+    NBResponse *response = new NBResponse(csoc);
+    if (strncmp(response->type, "GOOD", 4) == 0)
     {
         cout << "Exit successful\n";
     }
-    else if (strncmp(response, "ERRM", 4) == 0)
+    else if (strncmp(response->type, "ERRM", 4) == 0)
     {
         cout << "Exit failed with error message\n";
     }
@@ -266,6 +301,7 @@ void exitProg(int &csoc)
     }
 }
 
+// Client Interface
 void clientInterface(int csoc)
 {
     cout << "Client Interface\n";
@@ -273,6 +309,7 @@ void clientInterface(int csoc)
     bool loggedIn = false;
     while (true)
     {
+        cout << "> ";
         string command;
         vector<string> tokens;
         getline(cin, command);
@@ -299,26 +336,9 @@ void clientInterface(int csoc)
         {
             post(command, csoc, loggedIn);
         }
-        else if (tokens[0] == "getm") // TODO:
+        else if (tokens[0] == "getm") // 0000GETM
         {
-            // Get Messages send
-            char *appmsg = "0004GETM";
-            send(csoc, appmsg, 8, 0);
-
-            // Get Messages response
-            NBResponse *response = new NBResponse(csoc);
-            if (strncmp(response->type, "LIST", 4) == 0)
-            {
-                cout << "Get Messages successful\n";
-            }
-            else if (strncmp(response->type, "ERRM", 4) == 0)
-            {
-                cout << "Get Messages failed with error message\n";
-            }
-            else
-            {
-                cout << "Get Messages failed\n";
-            }
+            getMessages(csoc, loggedIn);
         }
         else if (tokens[0] == "exit") // 0008EXIT
         {
@@ -327,7 +347,7 @@ void clientInterface(int csoc)
         }
         else
         {
-            cout << "Invalid command. To exit, call \"exit.\"\n";
+            cout << "Invalid command. To exit, call \"exit\".\n";
         }
     }
 }

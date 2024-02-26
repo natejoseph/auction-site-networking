@@ -43,7 +43,12 @@ int main(int argc, char *argv[])
 	int ssoc;	 // server socket -passive
 	int commsoc; // communication socket -active
 
-	int sckt = 50004;
+	if (argc != 2)
+	{
+		cerr << "Usage: " << argv[0] << " port\n";
+		return -1;
+	}
+	int sckt = atoi(argv[1]);
 
 	cout << "TCPBaseServer" << endl; // prints TCPBaseServer
 
