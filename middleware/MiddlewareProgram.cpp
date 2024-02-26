@@ -15,7 +15,7 @@
 #include <ctime>
 
 using namespace std;
-// TODO: REWORK SIZE, TIME FUNCTIONALITY
+// TODO: TIME FUNCTIONALITY
 
 // Object Definitions
 class User
@@ -213,8 +213,8 @@ void login(NBMessage *msg, int &csoc, int &uid)
     }
     else
     {
-        char *response = "0000ERRM";
-        send(csoc, response, 8, 0);
+        char *response = "0001ERRM1";
+        send(csoc, response, 9, 0);
     }
 }
 
@@ -229,8 +229,8 @@ void logout(NBMessage *msg, int &csoc, int &uid)
     }
     else
     {
-        char *response = "0000ERRM";
-        send(csoc, response, 8, 0);
+        char *response = "0001ERRM2";
+        send(csoc, response, 9, 0);
     }
 }
 
@@ -238,8 +238,8 @@ void post(NBMessage *msg, int &csoc, int &uid, int &messageIndex)
 {
     if (uid == -1)
     {
-        char *response = "0000ERRM";
-        send(csoc, response, 8, 0);
+        char *response = "0001ERRM3";
+        send(csoc, response, 9, 0);
         return;
     }
 
@@ -259,8 +259,8 @@ void getMessages(int &csoc, int &uid)
 {
     if (uid == -1)
     {
-        char *response = "0000ERRM";
-        send(csoc, response, 8, 0);
+        char *response = "0001ERRM4";
+        send(csoc, response, 9, 0);
         return;
     }
 

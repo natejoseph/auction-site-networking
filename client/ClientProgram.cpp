@@ -14,8 +14,6 @@
 
 using namespace std;
 
-// TODO: Error handling, getm
-
 // Object Definitions
 struct NBResponse
 {
@@ -68,8 +66,29 @@ int recvLoop(int csoc, char *data, const int size)
     return size - nleft;
 }
 
-void errorMessagePrint() // TODO:
+void errorMessagePrint(int errCode)
 {
+    switch (errCode)
+    {
+    case 1:
+        cout << "Wrong username or password\n";
+        break;
+    case 2:
+        cout << "Logout failed\n";
+        break;
+    case 3:
+        cout << "Post failed\n";
+        break;
+    case 4:
+        cout << "Get Messages failed\n";
+        break;
+    case 5:
+        cout << "Exit failed\n";
+        break;
+    default:
+        cout << "Error\n";
+        break;
+    }
 }
 
 string messageEncode(string msg)
@@ -172,7 +191,7 @@ void login(int &index, string &command, int &csoc, bool &loggedIn, string &usern
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        cout << "Login failed with error message\n";
+        errorMessagePrint(response->data[0] - '0');
     }
     else
     {
@@ -214,7 +233,7 @@ void logout(int &csoc, bool &loggedIn, string &username)
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        cout << "Logout failed with error message\n";
+        errorMessagePrint(response->data[0] - '0');
     }
     else
     {
@@ -244,7 +263,7 @@ void post(string &command, int &csoc, bool &loggedIn)
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        cout << "Post failed with error message\n";
+        errorMessagePrint(response->data[0] - '0');
     }
     else
     {
@@ -271,7 +290,7 @@ void getMessages(int &csoc, bool &loggedIn)
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        cout << "Get Messages failed with error message\n";
+        errorMessagePrint(response->data[0] - '0');
     }
     else
     {
@@ -293,7 +312,7 @@ void exitProg(int &csoc)
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        cout << "Exit failed with error message\n";
+        errorMessagePrint(response->data[0] - '0');
     }
     else
     {
