@@ -85,6 +85,12 @@ void errorMessagePrint(int errCode)
     case 5:
         cout << "Exit failed\n";
         break;
+    case 7:
+        cout << "Bid failed\n";
+        break;
+    case 8:
+        cout << "Your bid is not the highest\n";
+        break;
     default:
         cout << "Error\n";
         break;
@@ -123,6 +129,52 @@ void printMessages(NBResponse *msg)
         cout << "TTL: " << data.substr(stt, data.find(",", stt) - stt) << endl;
         stt = data.find(",", stt) + 1;
         cout << "Message:\n"
+             << data.substr(stt, pos - stt) << endl
+             << endl;
+        // token = data.substr(0, pos);
+        //  cout << token << endl;
+        data.erase(0, pos + delimiter.length());
+    }
+}
+
+void printItems(NBResponse *msg)
+{
+    cout << "Items:\n";
+    // data format: timestamp;name,timestamp,ttl,message)=msg-end=(
+
+    string data = string(msg->data);
+    string delimiter = ")=msg-end=(";
+    size_t pos = 0;
+    string token;
+    while ((pos = data.find(delimiter)) != string::npos)
+    {
+        // format: timestamp;name,timestamp,ttl,message
+        auto stt = data.find(";") + 1;
+        cout << "Item: " << data.substr(stt, data.find(",", stt) - stt) << " ";
+        stt = data.find(",", stt) + 1;
+        cout << "(" << data.substr(stt, data.find(",", stt) - stt) << ")" << endl;
+        stt = data.find(",", stt) + 1;
+        cout << "From: " << data.substr(stt, data.find(",", stt) - stt) << endl;
+        stt = data.find(",", stt) + 1;
+        cout << "Timestamp: " << data.substr(stt, data.find(",", stt) - stt) << endl;
+        stt = data.find(",", stt) + 1;
+        cout << "TTL: " << data.substr(stt, data.find(",", stt) - stt) << endl;
+        stt = data.find(",", stt) + 1;
+        cout << "Price: " << data.substr(stt, data.find(",", stt) - stt) << endl;
+        stt = data.find(",", stt) + 1;
+        string bidder = data.substr(stt, data.find(",", stt) - stt);
+        if (bidder == "NULL")
+        {
+            cout << "No bids\n";
+            stt = data.find(",", stt) + 1;
+        }
+        else
+        {
+            stt = data.find(",", stt) + 1;
+            cout << "Highest Bid: " << bidder << ", " << data.substr(stt, data.find(",", stt) - stt) << endl;
+        }
+        stt = data.find(",", stt) + 1;
+        cout << "Description:\n"
              << data.substr(stt, pos - stt) << endl
              << endl;
         // token = data.substr(0, pos);
@@ -298,6 +350,116 @@ void getMessages(int &csoc, bool &loggedIn)
     }
 }
 
+void postItem(string &command, int &csoc, bool &loggedIn) // TODO: Error handling
+{
+    if (!loggedIn)
+    {
+        cout << "Not logged in\n";
+        return;
+    }
+    // Post Item send
+    string name = command.substr(6);
+    cout << "Enter description:\n";
+    string description;
+    cout << "> ";
+    getline(cin, description);
+    cout << "Enter price:\n";
+    string price;
+    cout << "> ";
+    getline(cin, price);
+    string op = to_string(name.size() + description.size() + price.size() + 2);
+    while (op.size() < 4)
+    {
+        op = "0" + op;
+    }
+    op += "PSTI";
+    op += name + ";" + description + ";" + price;
+    char appmsg[op.length()];
+    strcpy(appmsg, op.c_str());
+    send(csoc, appmsg, op.length(), 0);
+
+    // Post Item response
+    NBResponse *response = new NBResponse(csoc);
+    if (strncmp(response->type, "GOOD", 4) == 0)
+    {
+        cout << "Item post successful\n";
+    }
+    else if (strncmp(response->type, "ERRM", 4) == 0)
+    {
+        errorMessagePrint(response->data[0] - '0');
+    }
+    else
+    {
+        cout << "Item post failed\n";
+    }
+}
+
+void getItems(int &csoc, bool &loggedIn)
+{
+    if (!loggedIn)
+    {
+        cout << "Not logged in\n";
+        return;
+    }
+    // Get Items send
+    char *appmsg = "0000GETI";
+    send(csoc, appmsg, 8, 0);
+
+    // Get Items response
+    NBResponse *response = new NBResponse(csoc);
+    if (strncmp(response->type, "LIST", 4) == 0)
+    {
+        printItems(response);
+    }
+    else if (strncmp(response->type, "ERRM", 4) == 0)
+    {
+        errorMessagePrint(response->data[0] - '0');
+    }
+    else
+    {
+        cout << "Item retrieval failed\n";
+    }
+}
+
+void bid(string &command, int &csoc, bool &loggedIn)
+{
+    if (!loggedIn)
+    {
+        cout << "Not logged in\n";
+        return;
+    }
+    // Bid send
+    string line = command.substr(4);
+    string item = line.substr(0, line.find(" "));
+    string price = line.substr(line.find(" ") + 1);
+    item = item + ";" + price + ";";
+    string op = to_string(item.size());
+    while (op.size() < 4)
+    {
+        op = "0" + op;
+    }
+    op += "BIDD";
+    op += item;
+    char appmsg[op.length()];
+    strcpy(appmsg, op.c_str());
+    send(csoc, appmsg, op.length(), 0);
+
+    // Bid response
+    NBResponse *response = new NBResponse(csoc);
+    if (strncmp(response->type, "GOOD", 4) == 0)
+    {
+        cout << "Bid successful\n";
+    }
+    else if (strncmp(response->type, "ERRM", 4) == 0)
+    {
+        errorMessagePrint(response->data[0] - '0');
+    }
+    else
+    {
+        cout << "Bid failed\n";
+    }
+}
+
 void exitProg(int &csoc)
 {
     // Exit send
@@ -351,13 +513,25 @@ void clientInterface(int csoc)
         {
             logout(csoc, loggedIn, username);
         }
-        else if (tokens[0] == "post") // <sz>POST<message>
+        else if (tokens[0] == "postm") // <sz>POST<message>
         {
             post(command, csoc, loggedIn);
         }
         else if (tokens[0] == "getm") // 0000GETM
         {
             getMessages(csoc, loggedIn);
+        }
+        else if (tokens[0] == "posti") // <sz>PSTI<item>
+        {
+            postItem(command, csoc, loggedIn);
+        }
+        else if (tokens[0] == "geti") // 0000GETI
+        {
+            getItems(csoc, loggedIn);
+        }
+        else if (tokens[0] == "bid") // <sz>BIDD<iid><price>
+        {
+            bid(command, csoc, loggedIn);
         }
         else if (tokens[0] == "exit") // 0008EXIT
         {

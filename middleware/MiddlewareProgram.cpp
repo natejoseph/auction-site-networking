@@ -15,7 +15,7 @@
 #include <ctime>
 
 using namespace std;
-// TODO: TIME FUNCTIONALITY
+// TODO: TIME FUNCTIONALITY, GETM (NULL)
 
 // Object Definitions
 class User
@@ -94,6 +94,84 @@ struct Post
     }
 };
 
+struct Bid
+{
+    User *bidder;
+    int amount;
+    int timestamp;
+
+    Bid(User *bidder, int amount, int timestamp)
+    {
+        this->bidder = bidder;
+        this->amount = amount;
+        this->timestamp = timestamp;
+    }
+};
+
+struct Item
+{
+    User *seller;
+    string name;
+    string description;
+    int timestamp;
+    int ttl;
+    int price;
+    int iid;
+
+    // optional
+    Bid *bid;
+    bool visible;
+
+    Item(User *seller, string name, string description, int price, int timestamp, int ttl, int iid)
+    {
+        this->seller = seller;
+        this->name = name;
+        this->description = description;
+        this->price = price;
+        this->timestamp = timestamp;
+        this->ttl = ttl;
+        this->iid = iid;
+        this->bid = NULL;
+        this->visible = true;
+    }
+
+    bool setBid(Bid *bid)
+    {
+        if (this->bid == NULL || bid->amount > this->bid->amount)
+        {
+            this->bid = bid;
+            return true;
+        }
+        return false;
+    }
+
+    Bid *getBid()
+    {
+        return this->bid;
+    }
+
+    void setVisible(bool visible)
+    {
+        this->visible = visible;
+    }
+
+    bool checkActive()
+    {
+        return this->visible;
+    }
+
+    void display()
+    {
+        cout << "Item: " << this->name << endl;
+        cout << "From: " << this->seller->getUsername() << endl;
+        cout << "Timestamp: " << this->timestamp << endl;
+        cout << "TTL: " << this->ttl << endl;
+        cout << "Price: " << this->price << endl;
+        cout << "Description:\n"
+             << this->description << endl;
+    }
+};
+
 struct NBMessage
 {
     int size;
@@ -121,6 +199,7 @@ struct NBResponse
 // Global Variables
 unordered_map<string, User *> users;
 map<string, Post *> posts;
+map<int, Item *> items;
 unordered_map<int, User *> uids;
 
 // Function Definitions
@@ -193,7 +272,32 @@ NBResponse *returnMessages(string data)
     {
         if (it->second->checkActive())
         {
-            ss << it->first << ";" << it->second->from->getUsername() << "," << it->second->timestamp << "," << it->second->ttl << "," << it->second->data << ")=msg-end=(";
+            ss << it->first << ";" << it->second->from->getUsername() << ","
+               << it->second->timestamp << "," << it->second->ttl << "," << it->second->data << ")=msg-end=(";
+        }
+    }
+    data = ss.str();
+    return new NBResponse(data.size(), (char *)data.c_str());
+}
+
+NBResponse *returnItems(string data)
+{
+    stringstream ss;
+    for (auto it = items.begin(); it != items.end(); it++)
+    {
+        if (it->second->checkActive())
+        {
+            ss << it->first << ";" << it->second->name << "," << it->second->iid << "," << it->second->seller->getUsername() << ","
+               << it->second->timestamp << "," << it->second->ttl << "," << it->second->price << ",";
+            if (it->second->getBid() != NULL)
+            {
+                ss << it->second->getBid()->bidder->getUsername() << "," << it->second->getBid()->amount << ",";
+            }
+            else
+            {
+                ss << "NULL,0,";
+            }
+            ss << it->second->description << ")=msg-end=(";
         }
     }
     data = ss.str();
@@ -271,6 +375,74 @@ void getMessages(int &csoc, int &uid)
     send(csoc, response, strlen(response), 0);
 }
 
+void postItem(NBMessage *msg, int &csoc, int &uid, int &itemIndex)
+{
+    if (uid == -1)
+    {
+        char *response = "0001ERRM5";
+        send(csoc, response, 9, 0);
+        return;
+    }
+
+    char data[msg->size + 1]; // = msg->data+4;
+    strncpy(data, msg->data + 4, msg->size);
+    data[msg->size] = '\0';
+    string name = strtok(data, ";");
+    string description = strtok(NULL, ";");
+    int price = atoi(strtok(NULL, ";"));
+    int t = itemIndex++;
+    Item *item = new Item(uids[uid], name, description, price, t, 10, t);
+    items[t] = item;
+    char *response = "0000GOOD";
+    send(csoc, response, 8, 0);
+
+    item->display();
+}
+
+void getItems(int &csoc, int &uid)
+{
+    if (uid == -1)
+    {
+        char *response = "0001ERRM6";
+        send(csoc, response, 9, 0);
+        return;
+    }
+
+    // Send Response
+    string data;
+    string resp = messageEncode(returnItems(data));
+    char *response = (char *)resp.c_str();
+    send(csoc, response, strlen(response), 0);
+}
+
+void bid(NBMessage *msg, int &csoc, int &uid)
+{
+    if (uid == -1)
+    {
+        char *response = "0001ERRM7";
+        send(csoc, response, 9, 0);
+        return;
+    }
+
+    char data[msg->size + 1]; // = msg->data+4;
+    strncpy(data, msg->data + 4, msg->size);
+    data[msg->size] = '\0';
+    int item = atoi(strtok(data, ";"));
+    int amount = atoi(strtok(NULL, ";"));
+    int t = time(0);
+    Bid *bid = new Bid(uids[uid], amount, t);
+    if (items[item]->setBid(bid))
+    {
+        char *response = "0000GOOD";
+        send(csoc, response, 8, 0);
+    }
+    else
+    {
+        char *response = "0001ERRM8";
+        send(csoc, response, 9, 0);
+    }
+}
+
 void exitProg(int &csoc, int &uid)
 {
     // Send Response
@@ -286,6 +458,7 @@ void serverClientInteraction(int csoc)
     int uid = -1;
     hardCodeUsers();
     int messageIndex = 1;
+    int itemIndex = 1;
     while (true)
     {
         NBMessage *msg = readClient(csoc);
@@ -304,6 +477,18 @@ void serverClientInteraction(int csoc)
         else if (strncmp(msg->data, "GETM", 4) == 0)
         {
             getMessages(csoc, uid);
+        }
+        else if (strncmp(msg->data, "PSTI", 4) == 0)
+        {
+            postItem(msg, csoc, uid, itemIndex);
+        }
+        else if (strncmp(msg->data, "GETI", 4) == 0)
+        {
+            getItems(csoc, uid);
+        }
+        else if (strncmp(msg->data, "BIDD", 4) == 0)
+        {
+            bid(msg, csoc, uid);
         }
         else if (strncmp(msg->data, "EXIT", 4) == 0)
         {
