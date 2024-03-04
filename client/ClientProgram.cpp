@@ -83,7 +83,10 @@ void errorMessagePrint(int errCode)
         cout << "Get Messages failed\n";
         break;
     case 5:
-        cout << "Exit failed\n";
+        cout << "Post item failed\n";
+        break;
+    case 6:
+        cout << "Get items failed\n";
         break;
     case 7:
         cout << "Bid failed\n";
