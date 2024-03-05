@@ -26,7 +26,7 @@ void baseTCPProtocolS(int csoc)
 	// read 10 bytes from client
 	// char buf[10];
 	// recvLoop(csoc, buf, 10);
-	serverClientInteraction(csoc);
+	serverMiddlewareInteraction(csoc);
 
 	// send 10 bytes to client
 	// send(csoc, buf, 10, 0);

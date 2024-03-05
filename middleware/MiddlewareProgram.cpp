@@ -15,8 +15,7 @@
 #include <ctime>
 
 using namespace std;
-// TODO: TIME FUNCTIONALITY, GETM (NULL)
-
+// TODO: TIME FUNCTIONALITY
 // Object Definitions
 class User
 {
@@ -196,6 +195,53 @@ struct NBResponse
     }
 };
 
+struct ServerRequest
+{
+    int size;
+    char *data;
+
+    ServerRequest(int size, char *data)
+    {
+        this->size = size;
+        this->data = data;
+    }
+
+    void sendReq(int scsoc) // <size><data>
+    {
+        string op = to_string(this->size);
+        while (op.size() < 4)
+        {
+            op = "0" + op;
+        }
+        string data = string(this->data);
+        string res = op + data;
+
+        char *response = (char *)res.c_str();
+        send(scsoc, response, strlen(response), 0);
+    }
+};
+
+struct ServerResponse
+{
+    int size;
+    char *data;
+
+    ServerResponse(int &csoc)
+    {
+        char buf[5];
+        buf[4] = '\0';
+        recvLoop(csoc, buf, 4);
+        this->size = atoi(buf);
+        if (size > 0)
+        {
+            char *data = new char[this->size];
+            recvLoop(csoc, data, this->size);
+            this->data = data;
+            // cout << "Received data: " << this->data << endl;
+        }
+    }
+};
+
 // Global Variables
 unordered_map<string, User *> users;
 map<string, Post *> posts;
@@ -305,13 +351,30 @@ NBResponse *returnItems(string data)
 }
 
 // Command Functions
-void login(NBMessage *msg, int &csoc, int &uid)
+void login(NBMessage *msg, int &csoc, int &ssoc, int &uid)
 {
     string user = strtok(msg->data + 4, " ");
     string password = strtok(msg->data + 20, " ");
-    if (users.find(user) != users.end() && users[user]->checkPassword(password) && uid == -1)
+
+    user = "user::" + user;
+    char *u = (char *)user.c_str();
+    ServerRequest *req = new ServerRequest(strlen(u), u);
+    req->sendReq(ssoc);
+    cout << "Sent Request: " << req->data << endl;
+    ServerResponse *res = new ServerResponse(ssoc);
+    cout << "Received Response: " << res->data << endl;
+    string data = string(res->data);
+    if (data == "NULL")
     {
-        uid = users[user]->getUID();
+        char *response = "0002ERRM12";
+        send(csoc, response, 10, 0);
+        return;
+    }
+    string pw = strtok(res->data, ";");
+    string id = strtok(NULL, ";");
+    if (pw == password && uid == -1)
+    {
+        uid = stoi(id);
         char *response = "0000GOOD";
         send(csoc, response, 8, 0);
     }
@@ -472,8 +535,8 @@ void exitProg(int &csoc, int &uid)
     send(csoc, response, 8, 0);
 }
 
-// Server Client Interaction
-void serverClientInteraction(int csoc)
+// Middleware Client Interaction
+void middlewareClientInteraction(int csoc, int ssoc)
 {
     cout << "Server Client Interaction\n";
     int uid = -1;
@@ -485,7 +548,7 @@ void serverClientInteraction(int csoc)
         NBMessage *msg = readClient(csoc);
         if (strncmp(msg->data, "LGIN", 4) == 0)
         {
-            login(msg, csoc, uid);
+            login(msg, csoc, ssoc, uid);
         }
         else if (strncmp(msg->data, "LOUT", 4) == 0)
         {

@@ -103,6 +103,9 @@ void errorMessagePrint(int errCode)
     case 11:
         cout << "Item not found\n";
         break;
+    case 12:
+        cout << "Username doesn't exist\n";
+        break;
     default:
         cout << "Error\n";
         break;

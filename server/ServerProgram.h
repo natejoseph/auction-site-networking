@@ -9,5 +9,6 @@
 using namespace std;
 
 int recvLoop(int csoc, char *data, const int size);
+void serverMiddlewareInteraction(int csoc);
 
 #endif

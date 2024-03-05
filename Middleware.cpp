@@ -19,14 +19,14 @@ using namespace std;
 #include <unistd.h>
 #include "middleware/MiddlewareProgram.h"
 
-void baseTCPProtocolS(int csoc)
+void baseTCPProtocolS(int csoc, int ssoc)
 {
 	cout << "baseTCPProtocol Started\n";
 
 	// read 10 bytes from client
 	// char buf[10];
 	// recvLoop(csoc, buf, 10);
-	serverClientInteraction(csoc);
+	middlewareClientInteraction(csoc, ssoc);
 
 	// send 10 bytes to client
 	// send(csoc, buf, 10, 0);
@@ -36,21 +36,66 @@ void baseTCPProtocolS(int csoc)
 
 int main(int argc, char *argv[])
 {
+	if (argc != 4)
+	{
+		cerr << "Usage: " << argv[0] << " serverAddress serverPort middlewarePort\n";
+		return -1;
+	}
+
+	addrinfo hints, *res0; // client socket address
+	int commsocS;		   // communication socket server -active
+	int error;
+	const char *cause = NULL;
+
+	cout << "TCPMiddleware" << endl; // prints
+
+	// set the hints
+	// use AF_INET - IPv4 addressing
+	// use SOCK_STREAM - TCP protocol
+	// return info in res0
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	error = getaddrinfo(argv[1], NULL, &hints, &res0);
+	if (error)
+	{
+		cerr << "getaddrinfo error\n";
+		return -1;
+	}
+
+	// create the socket
+	commsocS = -1;
+	commsocS = socket(res0->ai_family, res0->ai_socktype,
+					  res0->ai_protocol);
+
+	if (commsocS < 0)
+	{
+		cerr << "cannot get socket\n";
+		return -1;
+	}
+
+	// set the port number
+	// first cast to sockaddr_in (IPv4 style addr)
+	// then set port, must use host-to-network order conversion
+	struct sockaddr_in *inaddr = (struct sockaddr_in *)(res0->ai_addr);
+	inaddr->sin_port = htons(atoi(argv[2]));
+
+	// connect to the server
+	if (connect(commsocS, res0->ai_addr, res0->ai_addrlen) < 0)
+	{
+		cerr << "Cannot connect\n";
+		return -1;
+	}
+
+	cout << "Connected to " << argv[1] << " on " << argv[2] << endl;
 
 	sockaddr_in sin;  // local socket address
 	sockaddr_in fsin; // client socket address
 
-	int ssoc;	 // server socket -passive
-	int commsoc; // communication socket -active
+	int ssoc;	  // server socket -passive
+	int commsocC; // communication socket -active
 
-	if (argc != 2)
-	{
-		cerr << "Usage: " << argv[0] << " port\n";
-		return -1;
-	}
-	int sckt = atoi(argv[1]);
-
-	cout << "TCPBaseServer" << endl; // prints TCPBaseServer
+	int sckt = atoi(argv[3]);
 
 	// init the local address
 	memset(&sin, 0, sizeof(sin));
@@ -88,21 +133,24 @@ int main(int argc, char *argv[])
 
 		// wait for connection
 		unsigned int alen = sizeof(fsin);
-		commsoc = accept(ssoc, (sockaddr *)&fsin, &alen);
-		if (commsoc < 0)
+		commsocC = accept(ssoc, (sockaddr *)&fsin, &alen);
+		if (commsocC < 0)
 		{
 			cerr << "Error on accept\n";
 			break;
 		}
 
 		// run the application protocol
-		baseTCPProtocolS(commsoc);
+		baseTCPProtocolS(commsocC, commsocS);
 
 		// close the communication socket
-		close(commsoc);
+		close(commsocC);
 	}
 
 	close(ssoc);
+
+	// close the socket
+	close(commsocS);
 
 	return 0;
 }
