@@ -368,6 +368,13 @@ void getMessages(int &csoc, int &uid)
         return;
     }
 
+    if (posts.size() == 0)
+    {
+        char *response = "0001ERRM9";
+        send(csoc, response, 9, 0);
+        return;
+    }
+
     // Send Response
     string data;
     string resp = messageEncode(returnMessages(data));
@@ -383,6 +390,7 @@ void postItem(NBMessage *msg, int &csoc, int &uid, int &itemIndex)
         send(csoc, response, 9, 0);
         return;
     }
+    // Error Checking if parameters have been inputted correctly
 
     char data[msg->size + 1]; // = msg->data+4;
     strncpy(data, msg->data + 4, msg->size);
@@ -408,6 +416,13 @@ void getItems(int &csoc, int &uid)
         return;
     }
 
+    if (items.size() == 0)
+    {
+        char *response = "0002ERRM10";
+        send(csoc, response, 10, 0);
+        return;
+    }
+
     // Send Response
     string data;
     string resp = messageEncode(returnItems(data));
@@ -430,6 +445,12 @@ void bid(NBMessage *msg, int &csoc, int &uid)
     int item = atoi(strtok(data, ";"));
     int amount = atoi(strtok(NULL, ";"));
     int t = time(0);
+    if (items.find(item) == items.end())
+    {
+        char *response = "0001ERRM11";
+        send(csoc, response, 10, 0);
+        return;
+    }
     Bid *bid = new Bid(uids[uid], amount, t);
     if (items[item]->setBid(bid))
     {

@@ -94,6 +94,15 @@ void errorMessagePrint(int errCode)
     case 8:
         cout << "Your bid is not the highest\n";
         break;
+    case 9:
+        cout << "There are no messages\n";
+        break;
+    case 10:
+        cout << "There are no items\n";
+        break;
+    case 11:
+        cout << "Item not found\n";
+        break;
     default:
         cout << "Error\n";
         break;
@@ -246,7 +255,7 @@ void login(int &index, string &command, int &csoc, bool &loggedIn, string &usern
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        errorMessagePrint(response->data[0] - '0');
+        errorMessagePrint(atoi(response->data));
     }
     else
     {
@@ -288,7 +297,7 @@ void logout(int &csoc, bool &loggedIn, string &username)
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        errorMessagePrint(response->data[0] - '0');
+        errorMessagePrint(atoi(response->data));
     }
     else
     {
@@ -304,7 +313,18 @@ void post(string &command, int &csoc, bool &loggedIn)
         return;
     }
     // Post send
-    string msg = command.substr(5);
+    if (command.size() < 6)
+    {
+        cout << "Invalid message\n"
+             << "Format: postm <message>\n";
+        return;
+    }
+    else if (command.size() == 6)
+    {
+        cout << "Empty message\n";
+        return;
+    }
+    string msg = command.substr(6);
     string op = messageEncode(msg);
     char appmsg[op.length()];
     strcpy(appmsg, op.c_str());
@@ -318,7 +338,7 @@ void post(string &command, int &csoc, bool &loggedIn)
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        errorMessagePrint(response->data[0] - '0');
+        errorMessagePrint(atoi(response->data));
     }
     else
     {
@@ -345,7 +365,7 @@ void getMessages(int &csoc, bool &loggedIn)
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        errorMessagePrint(response->data[0] - '0');
+        errorMessagePrint(atoi(response->data));
     }
     else
     {
@@ -353,7 +373,7 @@ void getMessages(int &csoc, bool &loggedIn)
     }
 }
 
-void postItem(string &command, int &csoc, bool &loggedIn) // TODO: Error handling
+void postItem(string &command, int &csoc, bool &loggedIn)
 {
     if (!loggedIn)
     {
@@ -361,15 +381,43 @@ void postItem(string &command, int &csoc, bool &loggedIn) // TODO: Error handlin
         return;
     }
     // Post Item send
+    if (command.size() <= 6)
+    {
+        cout << "Invalid item post\n"
+             << "Format: posti <itemname>\n";
+        return;
+    }
+    else if (command.size() == 6)
+    {
+        cout << "Empty item name\n";
+        return;
+    }
     string name = command.substr(6);
     cout << "Enter description:\n";
     string description;
     cout << "> ";
     getline(cin, description);
+    if (description.size() == 0)
+    {
+        cout << "Empty description\n"
+             << "Item post failed\n";
+        return;
+    }
     cout << "Enter price:\n";
     string price;
     cout << "> ";
     getline(cin, price);
+    if (price.size() == 0)
+    {
+        cout << "Empty price\n"
+             << "Item post failed\n";
+        return;
+    }
+    else if (price.find_first_not_of("0123456789") != string::npos)
+    {
+        cout << "Invalid price\n";
+        return;
+    }
     string op = to_string(name.size() + description.size() + price.size() + 2);
     while (op.size() < 4)
     {
@@ -389,7 +437,7 @@ void postItem(string &command, int &csoc, bool &loggedIn) // TODO: Error handlin
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        errorMessagePrint(response->data[0] - '0');
+        errorMessagePrint(atoi(response->data));
     }
     else
     {
@@ -416,7 +464,7 @@ void getItems(int &csoc, bool &loggedIn)
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        errorMessagePrint(response->data[0] - '0');
+        errorMessagePrint(atoi(response->data));
     }
     else
     {
@@ -433,8 +481,24 @@ void bid(string &command, int &csoc, bool &loggedIn)
     }
     // Bid send
     string line = command.substr(4);
+    if (line.size() == 0)
+    {
+        cout << "Invalid bid\n"
+             << "Format: bid <itemid> <price>\n";
+        return;
+    }
     string item = line.substr(0, line.find(" "));
+    if (item.size() == 0 || item.find_first_not_of("0123456789") != string::npos)
+    {
+        cout << "Invalid item id\n";
+        return;
+    }
     string price = line.substr(line.find(" ") + 1);
+    if (price.size() == 0 || price.find_first_not_of("0123456789") != string::npos)
+    {
+        cout << "Invalid price\n";
+        return;
+    }
     item = item + ";" + price + ";";
     string op = to_string(item.size());
     while (op.size() < 4)
@@ -455,7 +519,7 @@ void bid(string &command, int &csoc, bool &loggedIn)
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        errorMessagePrint(response->data[0] - '0');
+        errorMessagePrint(atoi(response->data));
     }
     else
     {
@@ -477,7 +541,7 @@ void exitProg(int &csoc)
     }
     else if (strncmp(response->type, "ERRM", 4) == 0)
     {
-        errorMessagePrint(response->data[0] - '0');
+        errorMessagePrint(atoi(response->data));
     }
     else
     {
