@@ -116,6 +116,27 @@ void serverMiddlewareInteraction(int csoc)
     {
         MWRequest *req = new MWRequest(csoc);
         cout << "Received data: " << req->data << endl;
+        if (strncmp(req->data, "check::ttl", 10) == 0)
+        {
+            for (auto it = serverData.begin(); it != serverData.end(); it++)
+            {
+                if ((it->first.rfind("u", 0) != 0) && (stoi(it->second.substr(0, it->second.find(";"))) <= t))
+                {
+                    if (it->first.substr(0, 6) == "item::")
+                    {
+                        string data = "";
+                        data += it->first.substr(it->first.find(":;") + 2) + ";";
+                        data += it->second.substr(it->second.find(";") + 1) + "::";
+                        MWResponse *res = new MWResponse((char *)data.c_str(), csoc);
+                    }
+                    cout << "Erased: " << it->first << endl;
+                    serverData.erase(it);
+                }
+            }
+            MWResponse *res = new MWResponse((char *)"DONE", csoc);
+            continue;
+        }
+
         if (strncmp(req->data, "send::", 6) == 0) // key: <kind>::<uid>:;<inputNum>
         {                                         // value: <ttl>;<uid>;<value>
             string data = string(req->data);
@@ -239,14 +260,6 @@ void serverMiddlewareInteraction(int csoc)
 
             MWResponse *res = new MWResponse((char *)"NULL", csoc);
             cout << "Sent data: " << res->data << endl;
-        }
-        for (auto it = serverData.begin(); it != serverData.end(); it++)
-        {
-            if ((it->first.rfind("u", 0) != 0) && (stoi(it->second.substr(0, it->second.find(";"))) <= t))
-            {
-                cout << "Erased: " << it->first << endl;
-                serverData.erase(it);
-            }
         }
         t++;
     }

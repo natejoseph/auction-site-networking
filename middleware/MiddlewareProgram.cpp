@@ -390,6 +390,57 @@ NBResponse *returnItems(string data, int &ssoc, ServerResponse *res)
     return new NBResponse(data.size(), (char *)data.c_str());
 }
 
+void checkTTL(int &ssoc)
+{
+    // check TTL of all items and messages
+    while (true)
+    {
+        string serverData = "check::ttl";
+        ServerRequest *req = new ServerRequest(serverData.length(), (char *)serverData.c_str());
+        req->sendReq(ssoc);
+        cout << "Sent Request: " << req->data << endl;
+        ServerResponse *res = new ServerResponse(ssoc);
+        cout << "Received Response: " << res->data << endl;
+        string resData = string(res->data);
+        if (resData == "NULL" || resData == "DONE")
+        {
+            break;
+        }
+        else
+        {
+            // process data
+            string message = "The auction for " + resData.substr(0, resData.find(";")) + " has ended\n";
+            message += "The winner is " + resData.substr(resData.find(";") + 1, resData.find("::") - resData.find(";") - 1) + "\n";
+            int ttl = 30;
+            string key = "send::mess::0";
+            string value = to_string(ttl) + ";0;" + resData;
+            ServerRequest *req2 = new ServerRequest(key.length(), (char *)key.c_str());
+            req2->sendReq(ssoc);
+            cout << "Sent Request: " << req2->data << endl;
+            ServerResponse *res2 = new ServerResponse(ssoc);
+            cout << "Received Response: " << res2->data << endl;
+            string resData2 = string(res2->data);
+            if (resData2 != "KEY")
+            {
+                cout << "Error: " << resData2 << endl;
+                return;
+            }
+
+            ServerRequest *req3 = new ServerRequest(value.length(), (char *)value.c_str());
+            req3->sendReq(ssoc);
+            cout << "Sent Request: " << req3->data << endl;
+            ServerResponse *res3 = new ServerResponse(ssoc);
+            cout << "Received Response: " << res3->data << endl;
+            string resData3 = string(res3->data);
+            if (resData3 != "OK")
+            {
+                cout << "Error: " << resData3 << endl;
+                return;
+            }
+        }
+    }
+}
+
 // Command Functions
 void login(NBMessage *msg, int &csoc, int &ssoc, int &uid)
 {
@@ -641,7 +692,6 @@ void bid(NBMessage *msg, int &csoc, int &ssoc, int &uid)
         send(csoc, response, 10, 0);
         return;
     }
-    // TODO: create a bid on the found item
     serverData = "get::bidd::" + item;
     ServerRequest *req2 = new ServerRequest(serverData.length(), (char *)serverData.c_str());
     req2->sendReq(ssoc);
@@ -729,6 +779,16 @@ void bid(NBMessage *msg, int &csoc, int &ssoc, int &uid)
             char *response = "0001ERRM8";
             send(csoc, response, 9, 0);
         }
+    }
+}
+
+void privateMessage(NBMessage *msg, int &csoc, int &ssoc, int &uid)
+{
+    if (uid == -1)
+    {
+        char *response = "0001ERRM3";
+        send(csoc, response, 9, 0);
+        return;
     }
 }
 

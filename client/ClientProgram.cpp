@@ -324,7 +324,7 @@ void post(string &command, int &csoc, bool &loggedIn)
         return;
     }
     // Post send
-    if (command.size() < 6)
+    if (command.size() <= 11)
     {
         cout << "Invalid message\n"
              << "Format: postmessage <message>\n";
@@ -551,6 +551,66 @@ void bid(string &command, int &csoc, bool &loggedIn)
     }
 }
 
+void privateMessage(string &command, int &csoc, bool &loggedIn)
+{
+    if (!loggedIn)
+    {
+        cout << "Not logged in\n";
+        return;
+    }
+
+    if (command.size() <= 15)
+    {
+        cout << "Invalid private message\n"
+             << "Format: privatemessage <userid>\n";
+        return;
+    }
+    else if (command.size() == 16)
+    {
+        cout << "Empty userid\n"
+             << "Message send failed\n";
+        return;
+    }
+
+    string uid = command.substr(15);
+    cout << "Enter message:\n";
+    string message;
+    cout << "> ";
+    getline(cin, message);
+    if (message.size() == 0)
+    {
+        cout << "Empty message\n"
+             << "Private message failed\n";
+        return;
+    }
+
+    time_t now = time(0);
+    char *dt = ctime(&now);
+    string timestamp = string(dt);
+    timestamp.pop_back();
+    string msg = command.substr(12);
+    msg = "pm::" + uid + ";" + timestamp + ";" + msg;
+    string op = messageEncode(msg);
+    char appmsg[op.length()];
+    strcpy(appmsg, op.c_str());
+    send(csoc, appmsg, op.length(), 0);
+
+    // Post response
+    NBResponse *response = new NBResponse(csoc);
+    if (strncmp(response->type, "GOOD", 4) == 0)
+    {
+        cout << "Post successful\n";
+    }
+    else if (strncmp(response->type, "ERRM", 4) == 0)
+    {
+        errorMessagePrint(atoi(response->data));
+    }
+    else
+    {
+        cout << "Post error\n";
+    }
+}
+
 void exitProg(int &csoc)
 {
     // Exit send
@@ -630,6 +690,9 @@ void clientInterface(int csoc)
         {
             bid(command, csoc, loggedIn);
         }
+        // else if (tokens[0] == "privatemessage")
+        //{
+        // }
         else if (tokens[0] == "exit") // 0008EXIT
         {
             exitProg(csoc);
