@@ -311,24 +311,68 @@ void hardCodeUsers()
     uids[3] = users["admin"];
 }
 
-NBResponse *returnMessages(string data)
+NBResponse *returnMessages(string data, int &ssoc, ServerResponse *res)
 {
     stringstream ss;
-    for (auto it = posts.begin(); it != posts.end(); it++)
+    string info = string(res->data);
+    while (true)
     {
-        if (it->second->checkActive())
+        string uid = "uid::" + info.substr(0, info.find(";"));
+        ServerRequest *req = new ServerRequest(uid.length(), (char *)uid.c_str());
+        req->sendReq(ssoc);
+        cout << "Sent Request: " << req->data << endl;
+        ServerResponse *res2 = new ServerResponse(ssoc);
+        cout << "Received Response: " << res2->data << endl;
+        string username = string(res2->data);
+
+        ss << "0;" << username << ","
+           << "0,"
+           << "0," << info.substr(info.find(";") + 1, info.find("::") - 2) << ")=msg-end=(";
+        info.erase(0, info.find("::") + 2);
+        if (info.find("::") == string::npos)
         {
-            ss << it->first << ";" << it->second->from->getUsername() << ","
-               << it->second->timestamp << "," << it->second->ttl << "," << it->second->data << ")=msg-end=(";
+            break;
         }
     }
     data = ss.str();
     return new NBResponse(data.size(), (char *)data.c_str());
 }
 
-NBResponse *returnItems(string data)
+NBResponse *returnItems(string data, int &ssoc, ServerResponse *res)
 {
     stringstream ss;
+    string info = string(res->data);
+    while (true)
+    {
+        string itemNum = info.substr(0, info.find(";"));
+        auto it = info.find(";") + 1;
+        string uid = "uid::" + info.substr(it, info.find(";", it) - it);
+        ServerRequest *req = new ServerRequest(uid.length(), (char *)uid.c_str());
+        req->sendReq(ssoc);
+        cout << "Sent Request: " << req->data << endl;
+        ServerResponse *res2 = new ServerResponse(ssoc);
+        cout << "Received Response: " << res2->data << endl;
+        string username = string(res2->data);
+        it = info.find(";", it) + 1;
+
+        ss << "0;";
+        ss << info.substr(it, info.find(";", it) - it) << ","; // name
+        ss << itemNum << ",";                                  // iid
+        ss << username << ",";                                 // seller
+        it = info.find(";", it) + 1;
+        ss << "0,";
+        ss << "0,";                                            // timestamp, ttl
+        ss << info.substr(it, info.find(";", it) - it) << ","; // price
+        it = info.find(";", it) + 1;
+        ss << "NULL,0,";                                              // bid
+        ss << info.substr(it, info.find("::") - it) << ")=msg-end=("; // description
+        info.erase(0, info.find("::") + 2);
+        if (info.find("::") == string::npos)
+        {
+            break;
+        }
+    }
+
     for (auto it = items.begin(); it != items.end(); it++)
     {
         if (it->second->checkActive())
@@ -385,23 +429,29 @@ void login(NBMessage *msg, int &csoc, int &ssoc, int &uid)
     }
 }
 
-void logout(NBMessage *msg, int &csoc, int &uid)
+void logout(NBMessage *msg, int &csoc, int &ssoc, int &uid)
 {
     string user = strtok(msg->data + 4, " ");
-    if (users.find(user) != users.end() && uid == users[user]->getUID())
-    {
-        uid = -1;
-        char *response = "0000GOOD";
-        send(csoc, response, 8, 0);
-    }
-    else
+    user = "user::" + user;
+    ServerRequest *req = new ServerRequest(user.length(), (char *)user.c_str());
+    req->sendReq(ssoc);
+    cout << "Sent Request: " << req->data << endl;
+    ServerResponse *res = new ServerResponse(ssoc);
+    cout << "Received Response: " << res->data << endl;
+    string data = string(res->data);
+    if (data == "NULL")
     {
         char *response = "0001ERRM2";
-        send(csoc, response, 9, 0);
+        send(csoc, response, 10, 0);
+        return;
     }
+
+    uid = -1;
+    char *response = "0000GOOD";
+    send(csoc, response, 8, 0);
 }
 
-void post(NBMessage *msg, int &csoc, int &uid, int &messageIndex)
+void post(NBMessage *msg, int &csoc, int &ssoc, int &uid)
 {
     if (uid == -1)
     {
@@ -413,16 +463,40 @@ void post(NBMessage *msg, int &csoc, int &uid, int &messageIndex)
     char data[msg->size + 1]; // = msg->data+4;
     strncpy(data, msg->data + 4, msg->size);
     data[msg->size] = '\0';
-    int t = messageIndex++;
-    Post *post = new Post(uids[uid], t, 10, data);
-    posts[to_string(t)] = post;
+    int ttl = 10;
+
+    string key = "send::mess::" + to_string(uid);
+    string value = to_string(ttl) + ";" + to_string(uid) + ";" + data;
+    ServerRequest *req = new ServerRequest(key.length(), (char *)key.c_str());
+    req->sendReq(ssoc);
+    cout << "Sent Request: " << req->data << endl;
+    ServerResponse *res = new ServerResponse(ssoc);
+    cout << "Received Response: " << res->data << endl;
+    string resData = string(res->data);
+    if (resData != "KEY")
+    {
+        char *response = "0002ERRM13";
+        send(csoc, response, 10, 0);
+        return;
+    }
+
+    ServerRequest *req2 = new ServerRequest(value.length(), (char *)value.c_str());
+    req2->sendReq(ssoc);
+    cout << "Sent Request: " << req2->data << endl;
+    ServerResponse *res2 = new ServerResponse(ssoc);
+    cout << "Received Response: " << res2->data << endl;
+    string resData2 = string(res2->data);
+    if (resData2 != "OK")
+    {
+        char *response = "0002ERRM14";
+        send(csoc, response, 10, 0);
+        return;
+    }
     char *response = "0000GOOD";
     send(csoc, response, 8, 0);
-
-    post->display();
 }
 
-void getMessages(int &csoc, int &uid)
+void getMessages(int &csoc, int &ssoc, int &uid)
 {
     if (uid == -1)
     {
@@ -431,21 +505,34 @@ void getMessages(int &csoc, int &uid)
         return;
     }
 
-    if (posts.size() == 0)
+    string serverData = "get::mess::";
+    if (false) // inbox
+    {
+        serverData += to_string(uid);
+    }
+    else
+    {
+        serverData += "all";
+    }
+    ServerRequest *req = new ServerRequest(serverData.length(), (char *)serverData.c_str());
+    req->sendReq(ssoc);
+    cout << "Sent Request: " << req->data << endl;
+    ServerResponse *res = new ServerResponse(ssoc);
+    cout << "Received Response: " << res->data << endl;
+    if (res->data == "NULL")
     {
         char *response = "0001ERRM9";
         send(csoc, response, 9, 0);
         return;
     }
-
     // Send Response
     string data;
-    string resp = messageEncode(returnMessages(data));
+    string resp = messageEncode(returnMessages(data, ssoc, res));
     char *response = (char *)resp.c_str();
     send(csoc, response, strlen(response), 0);
 }
 
-void postItem(NBMessage *msg, int &csoc, int &uid, int &itemIndex)
+void postItem(NBMessage *msg, int &csoc, int &ssoc, int &uid)
 {
     if (uid == -1)
     {
@@ -458,19 +545,49 @@ void postItem(NBMessage *msg, int &csoc, int &uid, int &itemIndex)
     char data[msg->size + 1]; // = msg->data+4;
     strncpy(data, msg->data + 4, msg->size);
     data[msg->size] = '\0';
-    string name = strtok(data, ";");
+    int ttl = 10;
+
+    string key = "send::item::" + to_string(uid);
+    string value = to_string(ttl) + ";" + to_string(uid) + ";" + data;
+    ServerRequest *req = new ServerRequest(key.length(), (char *)key.c_str());
+    req->sendReq(ssoc);
+    cout << "Sent Request: " << req->data << endl;
+    ServerResponse *res = new ServerResponse(ssoc);
+    cout << "Received Response: " << res->data << endl;
+    string resData = string(res->data);
+    if (resData != "KEY")
+    {
+        char *response = "0002ERRM13";
+        send(csoc, response, 10, 0);
+        return;
+    }
+
+    ServerRequest *req2 = new ServerRequest(value.length(), (char *)value.c_str());
+    req2->sendReq(ssoc);
+    cout << "Sent Request: " << req2->data << endl;
+    ServerResponse *res2 = new ServerResponse(ssoc);
+    cout << "Received Response: " << res2->data << endl;
+    string resData2 = string(res2->data);
+    if (resData2 != "OK")
+    {
+        char *response = "0002ERRM14";
+        send(csoc, response, 10, 0);
+        return;
+    }
+
+    /*string name = strtok(data, ";");
     string description = strtok(NULL, ";");
     int price = atoi(strtok(NULL, ";"));
     int t = itemIndex++;
     Item *item = new Item(uids[uid], name, description, price, t, 10, t);
-    items[t] = item;
+    items[t] = item;*/
     char *response = "0000GOOD";
     send(csoc, response, 8, 0);
 
-    item->display();
+    // item->display();
 }
 
-void getItems(int &csoc, int &uid)
+void getItems(int &csoc, int &ssoc, int &uid)
 {
     if (uid == -1)
     {
@@ -479,16 +596,21 @@ void getItems(int &csoc, int &uid)
         return;
     }
 
-    if (items.size() == 0)
+    string serverData = "get::item::all";
+    ServerRequest *req = new ServerRequest(serverData.length(), (char *)serverData.c_str());
+    req->sendReq(ssoc);
+    cout << "Sent Request: " << req->data << endl;
+    ServerResponse *res = new ServerResponse(ssoc);
+    cout << "Received Response: " << res->data << endl;
+    if (res->data == "NULL")
     {
         char *response = "0002ERRM10";
-        send(csoc, response, 10, 0);
+        send(csoc, response, 9, 0);
         return;
     }
-
     // Send Response
     string data;
-    string resp = messageEncode(returnItems(data));
+    string resp = messageEncode(returnItems(data, ssoc, res));
     char *response = (char *)resp.c_str();
     send(csoc, response, strlen(response), 0);
 }
@@ -552,23 +674,23 @@ void middlewareClientInteraction(int csoc, int ssoc)
         }
         else if (strncmp(msg->data, "LOUT", 4) == 0)
         {
-            logout(msg, csoc, uid);
+            logout(msg, csoc, ssoc, uid);
         }
         else if (strncmp(msg->data, "POST", 4) == 0)
         {
-            post(msg, csoc, uid, messageIndex);
+            post(msg, csoc, ssoc, uid);
         }
         else if (strncmp(msg->data, "GETM", 4) == 0)
         {
-            getMessages(csoc, uid);
+            getMessages(csoc, ssoc, uid);
         }
         else if (strncmp(msg->data, "PSTI", 4) == 0)
         {
-            postItem(msg, csoc, uid, itemIndex);
+            postItem(msg, csoc, ssoc, uid);
         }
         else if (strncmp(msg->data, "GETI", 4) == 0)
         {
-            getItems(csoc, uid);
+            getItems(csoc, ssoc, uid);
         }
         else if (strncmp(msg->data, "BIDD", 4) == 0)
         {

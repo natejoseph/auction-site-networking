@@ -66,7 +66,7 @@ struct MWResponse
 };
 
 // Global Variables
-unordered_map<string, string> serverData;
+map<string, string> serverData;
 
 // Function Definitions
 int recvLoop(int csoc, char *data, const int size)
@@ -97,11 +97,11 @@ int recvLoop(int csoc, char *data, const int size)
 
 void hardCodeServerData()
 {
-    serverData["uid::0"] = "admin;123;0;";
+    serverData["uid::0"] = "admin";
     serverData["user::admin"] = "123;0;";
-    serverData["uid::1"] = "nate;joseph;1;";
+    serverData["uid::1"] = "nate";
     serverData["user::nate"] = "joseph;1;";
-    serverData["uid::2"] = "nigel;john;2;";
+    serverData["uid::2"] = "nigel";
     serverData["user::nigel"] = "john;2;";
 }
 
@@ -110,19 +110,89 @@ void serverMiddlewareInteraction(int csoc)
 {
     cout << "Server Middleware Interaction\n";
     hardCodeServerData();
+    int inputNum = 0;
+    int t = 0;
     while (true)
     {
         MWRequest *req = new MWRequest(csoc);
         cout << "Received data: " << req->data << endl;
-        if (serverData.find(req->data) == serverData.end())
-        {
-            MWResponse *res = new MWResponse((char *)"NULL", csoc);
+        if (strncmp(req->data, "send::", 6) == 0) // key: <kind>::<uid>:;<inputNum>
+        {                                         // value: <ttl>;<uid>;<value>
+            string data = string(req->data);
+            string key = data.substr(6, data.size());
+            key += ":;" + to_string(++inputNum);
+            cout << "Key: " << key << endl;
+            MWResponse *res = new MWResponse((char *)"KEY", csoc);
             cout << "Sent data: " << res->data << endl;
+            MWRequest *req = new MWRequest(csoc);
+            string value = string(req->data);
+            cout << "Value: " << req->data << endl;
+            serverData[key] = value;
+            MWResponse *res2 = new MWResponse((char *)"OK", csoc);
+            cout << "Sent data: " << res2->data << endl;
         }
-        else
+        else if (strncmp(req->data, "get::", 5) == 0) // request: <kind>::<uid>:;<inputNum>
+        {
+            string kind = string(req->data).substr(5, 4);
+            kind = kind + "::";
+            string key = string(req->data + 11);
+            cout << "Kind: " << kind << endl;
+            if (key == "all")
+            {
+                string data = "";
+                cout << "Data0: " << data << endl;
+                for (auto it = serverData.begin(); it != serverData.end(); it++)
+                {
+                    cout << "Substr: " << it->first.substr(0, 6) << endl;
+                    if (kind == it->first.substr(0, 6))
+                    {
+                        cout << "Data1: " << data << endl;
+                        if (kind == "item::")
+                        {
+                            data += to_string(inputNum) + ";";
+                        }
+                        data += it->second.substr(it->second.find(";") + 1) + "::";
+                        cout << "Data2: " << data << endl;
+                    }
+                }
+                if (data == "")
+                {
+                    data = "NULL";
+                }
+                cout << "Data: " << data << endl;
+                MWResponse *res = new MWResponse((char *)data.c_str(), csoc);
+                cout << "Sent data: " << res->data << endl;
+            }
+            else
+            {
+                string data = "";
+                kind += key + ":;";
+                for (auto it = serverData.begin(); it != serverData.end(); it++)
+                {
+                    if (it->first.rfind(kind, 0) == 0)
+                    {
+                        data += it->second + "::";
+                    }
+                }
+                if (data == "")
+                {
+                    data = "NULL";
+                }
+                MWResponse *res = new MWResponse((char *)data.c_str(), csoc);
+                cout << "Sent data: " << res->data << endl;
+            }
+        }
+        else if (serverData.find(req->data) != serverData.end())
         {
             MWResponse *res = new MWResponse((char *)serverData[req->data].c_str(), csoc);
             cout << "Sent data: " << res->data << endl;
         }
+        else
+        {
+
+            MWResponse *res = new MWResponse((char *)"NULL", csoc);
+            cout << "Sent data: " << res->data << endl;
+        }
+        t++;
     }
 }

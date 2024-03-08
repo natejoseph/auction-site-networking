@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <vector>
 
 using namespace std;
 
@@ -105,6 +106,12 @@ void errorMessagePrint(int errCode)
         break;
     case 12:
         cout << "Username doesn't exist\n";
+        break;
+    case 13:
+        cout << "Key creation error\n";
+        break;
+    case 14:
+        cout << "Value creation error\n";
         break;
     default:
         cout << "Error\n";
@@ -427,7 +434,7 @@ void postItem(string &command, int &csoc, bool &loggedIn)
         op = "0" + op;
     }
     op += "PSTI";
-    op += name + ";" + description + ";" + price;
+    op += name + ";" + price + ";" + description;
     char appmsg[op.length()];
     strcpy(appmsg, op.c_str());
     send(csoc, appmsg, op.length(), 0);
