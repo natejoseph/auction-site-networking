@@ -149,7 +149,7 @@ void serverMiddlewareInteraction(int csoc)
                         cout << "Data1: " << data << endl;
                         if (kind == "item::")
                         {
-                            data += to_string(inputNum) + ";";
+                            data += it->first.substr(it->first.find(":;") + 2) + ";";
                         }
                         data += it->second.substr(it->second.find(";") + 1) + "::";
                         cout << "Data2: " << data << endl;
@@ -163,7 +163,7 @@ void serverMiddlewareInteraction(int csoc)
                 MWResponse *res = new MWResponse((char *)data.c_str(), csoc);
                 cout << "Sent data: " << res->data << endl;
             }
-            else
+            else if (kind == "mess::")
             {
                 string data = "";
                 kind += key + ":;";
@@ -172,6 +172,47 @@ void serverMiddlewareInteraction(int csoc)
                     if (it->first.rfind(kind, 0) == 0)
                     {
                         data += it->second + "::";
+                    }
+                }
+                if (data == "")
+                {
+                    data = "NULL";
+                }
+                MWResponse *res = new MWResponse((char *)data.c_str(), csoc);
+                cout << "Sent data: " << res->data << endl;
+            }
+            else if (kind == "item::")
+            {
+                string data = "";
+                for (auto it = serverData.begin(); it != serverData.end(); it++)
+                {
+                    if (kind == it->first.substr(0, 6) && key == it->first.substr(it->first.find(":;") + 2))
+                    {
+                        data += it->second.substr(it->second.find(";") + 1) + "::";
+                        break;
+                    }
+                }
+                if (data == "")
+                {
+                    data = "NULL";
+                }
+                MWResponse *res = new MWResponse((char *)data.c_str(), csoc);
+                cout << "Sent data: " << res->data << endl;
+            }
+            else if (kind == "bidd::")
+            {
+                string data = "";
+                int mostRecent = 0;
+                for (auto it = serverData.begin(); it != serverData.end(); it++)
+                {
+                    if (kind == it->first.substr(0, 6) && key == it->first.substr(it->first.find("::") + 2, key.size()))
+                    {
+                        int temp = stoi(it->first.substr(it->first.find(":;") + 2));
+                        if (temp > mostRecent)
+                        {
+                            data = it->second.substr(it->second.find(";") + 1) + "::";
+                            mostRecent = temp;
+                        }
                     }
                 }
                 if (data == "")

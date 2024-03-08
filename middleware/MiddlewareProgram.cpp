@@ -242,12 +242,6 @@ struct ServerResponse
     }
 };
 
-// Global Variables
-unordered_map<string, User *> users;
-map<string, Post *> posts;
-map<int, Item *> items;
-unordered_map<int, User *> uids;
-
 // Function Definitions
 string messageEncode(NBResponse *msg)
 {
@@ -299,16 +293,6 @@ NBMessage *readClient(int csoc)
     cout << "Client Command: " << data << endl;
 
     return new NBMessage(size, data);
-}
-
-void hardCodeUsers()
-{
-    users["nate"] = new User("nate", "joseph", 1);
-    uids[1] = users["nate"];
-    users["nigel"] = new User("nigel", "john", 2);
-    uids[2] = users["nigel"];
-    users["admin"] = new User("admin", "123", 3);
-    uids[3] = users["admin"];
 }
 
 NBResponse *returnMessages(string data, int &ssoc, ServerResponse *res)
@@ -364,30 +348,40 @@ NBResponse *returnItems(string data, int &ssoc, ServerResponse *res)
         ss << "0,";                                            // timestamp, ttl
         ss << info.substr(it, info.find(";", it) - it) << ","; // price
         it = info.find(";", it) + 1;
-        ss << "NULL,0,";                                              // bid
+
+        string key = "get::bidd::" + itemNum;
+        ServerRequest *req3 = new ServerRequest(key.length(), (char *)key.c_str());
+        req3->sendReq(ssoc);
+        cout << "Sent Request: " << req3->data << endl;
+        ServerResponse *res3 = new ServerResponse(ssoc);
+        cout << "Received Response: " << res3->data << endl;
+        string resData3 = string(res3->data);
+        if (resData3 == "NULL")
+        {
+            ss << "NULL,0,"; // bid
+        }
+        else
+        {
+            string info = string(resData3);
+            auto it = info.find(";");
+            string prevBidder = info.substr(0, it);
+            string user = "uid::" + prevBidder;
+            ServerRequest *req = new ServerRequest(user.length(), (char *)user.c_str());
+            req->sendReq(ssoc);
+            cout << "Sent Request: " << req->data << endl;
+            ServerResponse *res = new ServerResponse(ssoc);
+            cout << "Received Response: " << res->data << endl;
+            string bidder = string(res->data);
+            it = info.find(";", it) + 1;
+            string prevAmount = info.substr(it, info.find("::") - it);
+            ss << bidder << ",";     // bid
+            ss << prevAmount << ","; // amount
+        }
         ss << info.substr(it, info.find("::") - it) << ")=msg-end=("; // description
         info.erase(0, info.find("::") + 2);
         if (info.find("::") == string::npos)
         {
             break;
-        }
-    }
-
-    for (auto it = items.begin(); it != items.end(); it++)
-    {
-        if (it->second->checkActive())
-        {
-            ss << it->first << ";" << it->second->name << "," << it->second->iid << "," << it->second->seller->getUsername() << ","
-               << it->second->timestamp << "," << it->second->ttl << "," << it->second->price << ",";
-            if (it->second->getBid() != NULL)
-            {
-                ss << it->second->getBid()->bidder->getUsername() << "," << it->second->getBid()->amount << ",";
-            }
-            else
-            {
-                ss << "NULL,0,";
-            }
-            ss << it->second->description << ")=msg-end=(";
         }
     }
     data = ss.str();
@@ -519,7 +513,8 @@ void getMessages(int &csoc, int &ssoc, int &uid)
     cout << "Sent Request: " << req->data << endl;
     ServerResponse *res = new ServerResponse(ssoc);
     cout << "Received Response: " << res->data << endl;
-    if (res->data == "NULL")
+    string resData = string(res->data);
+    if (resData == "NULL")
     {
         char *response = "0001ERRM9";
         send(csoc, response, 9, 0);
@@ -602,10 +597,11 @@ void getItems(int &csoc, int &ssoc, int &uid)
     cout << "Sent Request: " << req->data << endl;
     ServerResponse *res = new ServerResponse(ssoc);
     cout << "Received Response: " << res->data << endl;
-    if (res->data == "NULL")
+    string resData = string(res->data);
+    if (resData == "NULL")
     {
         char *response = "0002ERRM10";
-        send(csoc, response, 9, 0);
+        send(csoc, response, 10, 0);
         return;
     }
     // Send Response
@@ -615,7 +611,7 @@ void getItems(int &csoc, int &ssoc, int &uid)
     send(csoc, response, strlen(response), 0);
 }
 
-void bid(NBMessage *msg, int &csoc, int &uid)
+void bid(NBMessage *msg, int &csoc, int &ssoc, int &uid)
 {
     if (uid == -1)
     {
@@ -627,25 +623,110 @@ void bid(NBMessage *msg, int &csoc, int &uid)
     char data[msg->size + 1]; // = msg->data+4;
     strncpy(data, msg->data + 4, msg->size);
     data[msg->size] = '\0';
-    int item = atoi(strtok(data, ";"));
+    string item = strtok(data, ";");
     int amount = atoi(strtok(NULL, ";"));
-    int t = time(0);
-    if (items.find(item) == items.end())
+
+    string serverData = "get::item::" + item;
+    ServerRequest *req = new ServerRequest(serverData.length(), (char *)serverData.c_str());
+    req->sendReq(ssoc);
+    cout << "Sent Request: " << req->data << endl;
+    ServerResponse *res = new ServerResponse(ssoc);
+    cout << "Received Response: " << res->data << endl;
+    string resData = string(res->data);
+    if (resData == "NULL")
     {
-        char *response = "0001ERRM11";
+        char *response = "0002ERRM11";
         send(csoc, response, 10, 0);
         return;
     }
-    Bid *bid = new Bid(uids[uid], amount, t);
-    if (items[item]->setBid(bid))
+    // TODO: create a bid on the found item
+    serverData = "get::bidd::" + item;
+    ServerRequest *req2 = new ServerRequest(serverData.length(), (char *)serverData.c_str());
+    req2->sendReq(ssoc);
+    cout << "Sent Request: " << req2->data << endl;
+    ServerResponse *res2 = new ServerResponse(ssoc);
+    cout << "Received Response: " << res2->data << endl;
+    string resData2 = string(res2->data);
+    if (resData2 == "NULL")
     {
+        // no previous bids
+        int ttl = 10;
+        string key = "send::bidd::" + item;
+        string value = to_string(ttl) + ";" + to_string(uid) + ";" + to_string(amount);
+        ServerRequest *req3 = new ServerRequest(key.length(), (char *)key.c_str());
+        req3->sendReq(ssoc);
+        cout << "Sent Request: " << req3->data << endl;
+        ServerResponse *res3 = new ServerResponse(ssoc);
+        cout << "Received Response: " << res3->data << endl;
+        string resData3 = string(res3->data);
+        if (resData3 != "KEY")
+        {
+            char *response = "0002ERRM13";
+            send(csoc, response, 10, 0);
+            return;
+        }
+
+        ServerRequest *req4 = new ServerRequest(value.length(), (char *)value.c_str());
+        req4->sendReq(ssoc);
+        cout << "Sent Request: " << req4->data << endl;
+        ServerResponse *res4 = new ServerResponse(ssoc);
+        cout << "Received Response: " << res4->data << endl;
+        string resData4 = string(res4->data);
+        if (resData4 != "OK")
+        {
+            char *response = "0002ERRM14";
+            send(csoc, response, 10, 0);
+            return;
+        }
         char *response = "0000GOOD";
         send(csoc, response, 8, 0);
     }
     else
     {
-        char *response = "0001ERRM8";
-        send(csoc, response, 9, 0);
+        // compare bid to previous bid
+        string info = string(res2->data);
+        auto it = info.find(";");
+        string prevBidder = info.substr(0, it);
+        it = info.find(";", it) + 1;
+        string prevAmount = info.substr(it, info.find("::") - it);
+        if (amount > stoi(prevAmount))
+        {
+            int ttl = 10;
+            string key = "send::bidd::" + item;
+            string value = to_string(ttl) + ";" + to_string(uid) + ";" + to_string(amount);
+            ServerRequest *req3 = new ServerRequest(key.length(), (char *)key.c_str());
+            req3->sendReq(ssoc);
+            cout << "Sent Request: " << req3->data << endl;
+            ServerResponse *res3 = new ServerResponse(ssoc);
+            cout << "Received Response: " << res3->data << endl;
+            string resData3 = string(res3->data);
+            if (resData3 != "KEY")
+            {
+                char *response = "0002ERRM13";
+                send(csoc, response, 10, 0);
+                return;
+            }
+
+            ServerRequest *req4 = new ServerRequest(value.length(), (char *)value.c_str());
+            req4->sendReq(ssoc);
+            cout << "Sent Request: " << req4->data << endl;
+            ServerResponse *res4 = new ServerResponse(ssoc);
+            cout << "Received Response: " << res4->data << endl;
+            string resData4 = string(res4->data);
+            if (resData4 != "OK")
+            {
+                char *response = "0002ERRM14";
+                send(csoc, response, 10, 0);
+                return;
+            }
+            char *response = "0000GOOD";
+            send(csoc, response, 8, 0);
+        }
+        else
+        {
+            char *response = "0001ERRM8";
+            send(csoc, response, 9, 0);
+        }
     }
 }
 
@@ -662,7 +743,6 @@ void middlewareClientInteraction(int csoc, int ssoc)
 {
     cout << "Server Client Interaction\n";
     int uid = -1;
-    hardCodeUsers();
     int messageIndex = 1;
     int itemIndex = 1;
     while (true)
@@ -694,7 +774,7 @@ void middlewareClientInteraction(int csoc, int ssoc)
         }
         else if (strncmp(msg->data, "BIDD", 4) == 0)
         {
-            bid(msg, csoc, uid);
+            bid(msg, csoc, ssoc, uid);
         }
         else if (strncmp(msg->data, "EXIT", 4) == 0)
         {

@@ -399,7 +399,8 @@ void postItem(string &command, int &csoc, bool &loggedIn)
     }
     else if (command.size() == 6)
     {
-        cout << "Empty item name\n";
+        cout << "Empty item name\n"
+             << "Item post failed\n";
         return;
     }
     string name = command.substr(6);
@@ -425,7 +426,8 @@ void postItem(string &command, int &csoc, bool &loggedIn)
     }
     else if (price.find_first_not_of("0123456789") != string::npos)
     {
-        cout << "Invalid price\n";
+        cout << "Invalid price\n"
+             << "Item post failed\n";
         return;
     }
     string op = to_string(name.size() + description.size() + price.size() + 2);
@@ -534,6 +536,7 @@ void bid(string &command, int &csoc, bool &loggedIn)
     else
     {
         cout << "Bid failed\n";
+        cout << "Response: " << response->type << " " << response->data << "\n";
     }
 }
 
