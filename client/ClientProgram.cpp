@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <vector>
+#include <ctime>
 
 using namespace std;
 
@@ -113,6 +114,10 @@ void errorMessagePrint(int errCode)
     case 14:
         cout << "Value creation error\n";
         break;
+    case 15:
+        cout << "You are not an admin\n";
+    case 16:
+        cout << "Server shutdown failed\n";
     default:
         cout << "Error\n";
         break;
@@ -148,8 +153,6 @@ void printMessages(NBResponse *msg)
         stt = data.find(",", stt) + 1;
         cout << "Timestamp: " << data.substr(stt, data.find(",", stt) - stt) << endl;
         stt = data.find(",", stt) + 1;
-        cout << "TTL: " << data.substr(stt, data.find(",", stt) - stt) << endl;
-        stt = data.find(",", stt) + 1;
         cout << "Message:\n"
              << data.substr(stt, pos - stt) << endl
              << endl;
@@ -180,9 +183,7 @@ void printItems(NBResponse *msg)
         stt = data.find(",", stt) + 1;
         cout << "Timestamp: " << data.substr(stt, data.find(",", stt) - stt) << endl;
         stt = data.find(",", stt) + 1;
-        cout << "TTL: " << data.substr(stt, data.find(",", stt) - stt) << endl;
-        stt = data.find(",", stt) + 1;
-        cout << "Price: " << data.substr(stt, data.find(",", stt) - stt) << endl;
+        cout << "Price: $" << data.substr(stt, data.find(",", stt) - stt) << endl;
         stt = data.find(",", stt) + 1;
         string bidder = data.substr(stt, data.find(",", stt) - stt);
         if (bidder == "NULL")
@@ -193,7 +194,7 @@ void printItems(NBResponse *msg)
         else
         {
             stt = data.find(",", stt) + 1;
-            cout << "Highest Bid: " << bidder << ", " << data.substr(stt, data.find(",", stt) - stt) << endl;
+            cout << "Highest Bid: " << bidder << ", $" << data.substr(stt, data.find(",", stt) - stt) << endl;
         }
         stt = data.find(",", stt) + 1;
         cout << "Description:\n"
@@ -326,15 +327,20 @@ void post(string &command, int &csoc, bool &loggedIn)
     if (command.size() < 6)
     {
         cout << "Invalid message\n"
-             << "Format: postm <message>\n";
+             << "Format: postmessage <message>\n";
         return;
     }
-    else if (command.size() == 6)
+    else if (command.size() == 12)
     {
         cout << "Empty message\n";
         return;
     }
-    string msg = command.substr(6);
+    time_t now = time(0);
+    char *dt = ctime(&now);
+    string timestamp = string(dt);
+    timestamp.pop_back();
+    string msg = command.substr(12);
+    msg = timestamp + ";" + msg;
     string op = messageEncode(msg);
     char appmsg[op.length()];
     strcpy(appmsg, op.c_str());
@@ -391,19 +397,19 @@ void postItem(string &command, int &csoc, bool &loggedIn)
         return;
     }
     // Post Item send
-    if (command.size() <= 6)
+    if (command.size() <= 9)
     {
         cout << "Invalid item post\n"
-             << "Format: posti <itemname>\n";
+             << "Format: postitem <itemname>\n";
         return;
     }
-    else if (command.size() == 6)
+    else if (command.size() == 10)
     {
         cout << "Empty item name\n"
              << "Item post failed\n";
         return;
     }
-    string name = command.substr(6);
+    string name = command.substr(9);
     cout << "Enter description:\n";
     string description;
     cout << "> ";
@@ -430,13 +436,18 @@ void postItem(string &command, int &csoc, bool &loggedIn)
              << "Item post failed\n";
         return;
     }
-    string op = to_string(name.size() + description.size() + price.size() + 2);
+    time_t now = time(0);
+    char *dt = ctime(&now);
+    string timestamp = string(dt);
+    timestamp.pop_back();
+    string op = to_string(name.size() + description.size() + price.size() + timestamp.size() + 3);
     while (op.size() < 4)
     {
         op = "0" + op;
     }
+
     op += "PSTI";
-    op += name + ";" + price + ";" + description;
+    op += name + ";" + timestamp + ";" + price + ";" + description;
     char appmsg[op.length()];
     strcpy(appmsg, op.c_str());
     send(csoc, appmsg, op.length(), 0);
@@ -562,6 +573,12 @@ void exitProg(int &csoc)
     }
 }
 
+/*void fullExit(int &csoc)
+{
+    char *appmsg = "0001EXITF";
+    send(csoc, appmsg, 9, 0);
+}*/
+
 // Client Interface
 void clientInterface(int csoc)
 {
@@ -593,19 +610,19 @@ void clientInterface(int csoc)
         {
             logout(csoc, loggedIn, username);
         }
-        else if (tokens[0] == "postm") // <sz>POST<message>
+        else if (tokens[0] == "postmessage") // <sz>POST<message>
         {
             post(command, csoc, loggedIn);
         }
-        else if (tokens[0] == "getm") // 0000GETM
+        else if (tokens[0] == "getmessages") // 0000GETM
         {
             getMessages(csoc, loggedIn);
         }
-        else if (tokens[0] == "posti") // <sz>PSTI<item>
+        else if (tokens[0] == "postitem") // <sz>PSTI<item>
         {
             postItem(command, csoc, loggedIn);
         }
-        else if (tokens[0] == "geti") // 0000GETI
+        else if (tokens[0] == "getitems") // 0000GETI
         {
             getItems(csoc, loggedIn);
         }
@@ -618,6 +635,11 @@ void clientInterface(int csoc)
             exitProg(csoc);
             break;
         }
+        /*else if (tokens[0] == "fullexit")
+        {
+            fullExit(csoc);
+            break;
+        }*/
         else
         {
             cout << "Invalid command. To exit, call \"exit\".\n";

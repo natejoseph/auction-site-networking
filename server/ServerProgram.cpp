@@ -111,7 +111,7 @@ void serverMiddlewareInteraction(int csoc)
     cout << "Server Middleware Interaction\n";
     hardCodeServerData();
     int inputNum = 0;
-    int t = 0;
+    int t = 1;
     while (true)
     {
         MWRequest *req = new MWRequest(csoc);
@@ -127,6 +127,10 @@ void serverMiddlewareInteraction(int csoc)
             MWRequest *req = new MWRequest(csoc);
             string value = string(req->data);
             cout << "Value: " << req->data << endl;
+            // turn ttl to ttd
+            int ttl = stoi(value.substr(0, value.find(";")));
+            ttl += t;
+            value = to_string(ttl) + value.substr(value.find(";"), value.size());
             serverData[key] = value;
             MWResponse *res2 = new MWResponse((char *)"OK", csoc);
             cout << "Sent data: " << res2->data << endl;
@@ -140,19 +144,15 @@ void serverMiddlewareInteraction(int csoc)
             if (key == "all")
             {
                 string data = "";
-                cout << "Data0: " << data << endl;
                 for (auto it = serverData.begin(); it != serverData.end(); it++)
                 {
-                    cout << "Substr: " << it->first.substr(0, 6) << endl;
                     if (kind == it->first.substr(0, 6))
                     {
-                        cout << "Data1: " << data << endl;
                         if (kind == "item::")
                         {
                             data += it->first.substr(it->first.find(":;") + 2) + ";";
                         }
                         data += it->second.substr(it->second.find(";") + 1) + "::";
-                        cout << "Data2: " << data << endl;
                     }
                 }
                 if (data == "")
@@ -223,6 +223,12 @@ void serverMiddlewareInteraction(int csoc)
                 cout << "Sent data: " << res->data << endl;
             }
         }
+        else if (strncmp(req->data, "exit::full", 10) == 0)
+        {
+            MWResponse *res = new MWResponse((char *)"EXIT", csoc);
+            cout << "Sent data: " << res->data << endl;
+            break;
+        }
         else if (serverData.find(req->data) != serverData.end())
         {
             MWResponse *res = new MWResponse((char *)serverData[req->data].c_str(), csoc);
@@ -233,6 +239,14 @@ void serverMiddlewareInteraction(int csoc)
 
             MWResponse *res = new MWResponse((char *)"NULL", csoc);
             cout << "Sent data: " << res->data << endl;
+        }
+        for (auto it = serverData.begin(); it != serverData.end(); it++)
+        {
+            if ((it->first.rfind("u", 0) != 0) && (stoi(it->second.substr(0, it->second.find(";"))) <= t))
+            {
+                cout << "Erased: " << it->first << endl;
+                serverData.erase(it);
+            }
         }
         t++;
     }

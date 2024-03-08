@@ -309,9 +309,11 @@ NBResponse *returnMessages(string data, int &ssoc, ServerResponse *res)
         cout << "Received Response: " << res2->data << endl;
         string username = string(res2->data);
 
-        ss << "0;" << username << ","
-           << "0,"
-           << "0," << info.substr(info.find(";") + 1, info.find("::") - 2) << ")=msg-end=(";
+        ss << "0;" << username << ",";
+        auto it = info.find(";") + 1;
+        ss << info.substr(it, info.find(";", it) - it) << ",";
+        it = info.find(";", it) + 1;
+        ss << info.substr(it, info.find("::", it) - it) << ")=msg-end=(";
         info.erase(0, info.find("::") + 2);
         if (info.find("::") == string::npos)
         {
@@ -344,8 +346,8 @@ NBResponse *returnItems(string data, int &ssoc, ServerResponse *res)
         ss << itemNum << ",";                                  // iid
         ss << username << ",";                                 // seller
         it = info.find(";", it) + 1;
-        ss << "0,";
-        ss << "0,";                                            // timestamp, ttl
+        ss << info.substr(it, info.find(";", it) - it) << ","; // timestamp
+        it = info.find(";", it) + 1;
         ss << info.substr(it, info.find(";", it) - it) << ","; // price
         it = info.find(";", it) + 1;
 
@@ -457,7 +459,7 @@ void post(NBMessage *msg, int &csoc, int &ssoc, int &uid)
     char data[msg->size + 1]; // = msg->data+4;
     strncpy(data, msg->data + 4, msg->size);
     data[msg->size] = '\0';
-    int ttl = 10;
+    int ttl = 30;
 
     string key = "send::mess::" + to_string(uid);
     string value = to_string(ttl) + ";" + to_string(uid) + ";" + data;
@@ -540,7 +542,7 @@ void postItem(NBMessage *msg, int &csoc, int &ssoc, int &uid)
     char data[msg->size + 1]; // = msg->data+4;
     strncpy(data, msg->data + 4, msg->size);
     data[msg->size] = '\0';
-    int ttl = 10;
+    int ttl = 20;
 
     string key = "send::item::" + to_string(uid);
     string value = to_string(ttl) + ";" + to_string(uid) + ";" + data;
@@ -650,7 +652,7 @@ void bid(NBMessage *msg, int &csoc, int &ssoc, int &uid)
     if (resData2 == "NULL")
     {
         // no previous bids
-        int ttl = 10;
+        int ttl = 25;
         string key = "send::bidd::" + item;
         string value = to_string(ttl) + ";" + to_string(uid) + ";" + to_string(amount);
         ServerRequest *req3 = new ServerRequest(key.length(), (char *)key.c_str());
@@ -730,8 +732,48 @@ void bid(NBMessage *msg, int &csoc, int &ssoc, int &uid)
     }
 }
 
-void exitProg(int &csoc, int &uid)
+void exitProg(NBMessage *msg, int &csoc, int &uid)
 {
+    /*if (msg->size == 1)
+    {
+        char data[msg->size + 1]; // = msg->data+4;
+        strncpy(data, msg->data + 4, msg->size);
+        data[msg->size] = '\0';
+        if (strncmp(data, "F", 1) == 0)
+        {
+            if (uid == 0)
+            {
+                // shutdown server
+                string serverData = "exit::full";
+                ServerRequest *req = new ServerRequest(serverData.length(), (char *)serverData.c_str());
+                req->sendReq(csoc);
+                cout << "Sent Request: " << req->data << endl;
+                ServerResponse *res = new ServerResponse(csoc);
+                cout << "Received Response: " << res->data << endl;
+                string resData = string(res->data);
+                if (resData == "EXIT")
+                {
+                    cout << "Server Shutdown\n";
+                    char *response = "0000GOOD";
+                    send(csoc, response, 8, 0);
+                    return;
+                }
+                else
+                {
+                    cout << "Server Shutdown Error\n";
+                    char *response = "0002ERRM16";
+                    send(csoc, response, 10, 0);
+                    return;
+                }
+            }
+            else
+            {
+                char *response = "0002ERRM15";
+                send(csoc, response, 10, 0);
+                return;
+            }
+        }
+    }*/
     // Send Response
     char *response = "0000GOOD";
     uid = -1;
@@ -778,7 +820,7 @@ void middlewareClientInteraction(int csoc, int ssoc)
         }
         else if (strncmp(msg->data, "EXIT", 4) == 0)
         {
-            exitProg(csoc, uid);
+            exitProg(msg, csoc, uid);
             break;
         }
         else
